@@ -64,3 +64,14 @@ jobs:
 
       - name: Test the formula
         run: brew test pragmatic-engineer/tap/playbook
+
+      - name: Audit the playbook-usage formula
+        run: brew audit --strict --online pragmatic-engineer/tap/playbook-usage
+
+      - name: Install the playbook-usage formula
+        run: brew install --verbose pragmatic-engineer/tap/playbook-usage
+
+      - name: Test the playbook-usage formula
+        run: |
+          brew test pragmatic-engineer/tap/playbook-usage
+          pbtop --version
