@@ -56,22 +56,13 @@ jobs:
           rm -rf "$tap_dir/homebrew-tap"
           ln -s "$GITHUB_WORKSPACE" "$tap_dir/homebrew-tap"
 
-      - name: Audit the formula
-        run: brew audit --strict --online pragmatic-engineer/tap/playbook
-
-      - name: Install the formula
-        run: brew install --verbose pragmatic-engineer/tap/playbook
-
-      - name: Test the formula
-        run: brew test pragmatic-engineer/tap/playbook
-
-      - name: Audit the playbook-usage formula
-        run: brew audit --strict --online pragmatic-engineer/tap/playbook-usage
-
-      - name: Install the playbook-usage formula
-        run: brew install --verbose pragmatic-engineer/tap/playbook-usage
-
-      - name: Test the playbook-usage formula
+      - name: Audit, install and test every formula
         run: |
-          brew test pragmatic-engineer/tap/playbook-usage
+          set -euo pipefail
+          for f in Formula/*.rb; do
+            name="$(basename "$f" .rb)"
+            brew audit --strict --online "pragmatic-engineer/tap/${name}"
+            brew install --verbose "pragmatic-engineer/tap/${name}"
+            brew test "pragmatic-engineer/tap/${name}"
+          done
           pbtop --version
