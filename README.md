@@ -1,6 +1,6 @@
 # homebrew-tap
 
-Homebrew tap for [pragmatic-engineer/playbook](https://github.com/pragmatic-engineer/playbook), a Claude Code plugin toolkit.
+Homebrew tap for [pragmatic-engineer/playbook](https://github.com/pragmatic-engineer/playbook), a Claude Code plugin toolkit, and for [pragmatic-engineer/playbook-telemetry](https://github.com/pragmatic-engineer/playbook-telemetry), its standalone token and cost dashboard.
 
 ## Install
 
@@ -26,6 +26,15 @@ GitHub redirects the old repo URL, so existing links keep working. If `brew unta
 The formula downloads the prebuilt binary which `pragmatic-engineer/playbook`'s own release workflow builds, attests and checksums for each tagged release. It doesn't build from source and doesn't run a separate release pipeline. It wraps the same `SHA256SUMS` verified binary `install.sh` fetches.
 
 Covers macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl builds). Windows isn't a Homebrew target. Windows users should use `install.sh` directly, or WSL with the Linux binary.
+
+## Formulas
+
+| Formula | Install | What it installs |
+|---|---|---|
+| `playbook` | `brew install pragmatic-engineer/tap/playbook` | The `playbook` binary. |
+| `playbook-telemetry` | `brew install pragmatic-engineer/tap/playbook-telemetry` | The `playbook-telemetry` binary and its short alias `pbtop`. You do not need it if you have `playbook`, which includes the same dashboard as `playbook usage`. |
+
+The telemetry formula is in the middle of a rename from `playbook-usage`; until it lands, the formula file keeps the old name.
 
 ## Keeping the formula current
 
