@@ -14,6 +14,16 @@ concurrency:
 
 jobs:
   release:
+    strategy:
+      # One formula at a time: each bump branches from the current main.
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include:
+          - formula: playbook
+            repo: playbook
+          - formula: playbook-usage
+            repo: playbook-usage
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -31,11 +41,13 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          FORMULA: ${{ matrix.formula }}
+          SOURCE_REPO: ${{ matrix.repo }}
         run: |
           set -euo pipefail
-          tag="$(gh release view --repo pragmatic-engineer/playbook --json tagName --jq .tagName)"
+          tag="$(gh release view --repo "pragmatic-engineer/${SOURCE_REPO}" --json tagName --jq .tagName)"
           latest="${tag#v}"
-          current="$(sed -n 's#.*download/v\([0-9][0-9.]*\)/.*#\1#p' Formula/playbook.rb | head -n1)"
+          current="$(sed -n 's#.*download/v\([0-9][0-9.]*\)/.*#\1#p' Formula/${FORMULA}.rb | head -n1)"
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
           echo "current=${current}" >> "$GITHUB_OUTPUT"
           if [ "$latest" = "$current" ]; then
@@ -50,8 +62,9 @@ jobs:
         if: steps.release.outputs.outdated == 'true'
         env:
           VERSION: ${{ steps.release.outputs.latest }}
+          FORMULA: ${{ matrix.formula }}
         run: |
-          .github/scripts/bump-formula.sh "$VERSION"
+          .github/scripts/bump-formula.sh "$VERSION" "Formula/${FORMULA}.rb"
 
       - name: Open, check and merge the bump pull request
         if: steps.release.outputs.outdated == 'true'
@@ -59,11 +72,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           VERSION: ${{ steps.release.outputs.latest }}
-          FILE_PATH: Formula/playbook.rb
+          FORMULA: ${{ matrix.formula }}
         run: |
           set -euo pipefail
-          branch="bump/v${VERSION}"
-          title="chore(deps): bump playbook to ${VERSION}"
+          FILE_PATH="Formula/${FORMULA}.rb"
+          branch="bump/${FORMULA}-v${VERSION}"
+          title="chore(deps): bump ${FORMULA} to ${VERSION}"
 
           # Drop a branch left behind by a failed run.
           if gh api "repos/${REPO}/git/ref/heads/${branch}" >/dev/null 2>&1; then
@@ -92,7 +106,7 @@ jobs:
 
           pr="$(gh api -X POST "repos/${REPO}/pulls" \
             -f "title=${title}" -f "head=${branch}" -f base=main \
-            -f "body=Automated bump of the playbook pin to ${VERSION}, with URLs and checksums from the release SHA256SUMS. Squash merged once the checks pass." \
+            -f "body=Automated bump of the ${FORMULA} pin to ${VERSION}, with URLs and checksums from the release SHA256SUMS. Squash merged once the checks pass." \
             --jq .number)"
           echo "Opened pull request #${pr}."
 
