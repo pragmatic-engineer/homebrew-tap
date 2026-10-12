@@ -1,6 +1,10 @@
 # homebrew-tap
 
-Homebrew tap for [pragmatic-engineer/playbook](https://github.com/pragmatic-engineer/playbook), a Claude Code plugin toolkit, and for [pragmatic-engineer/playbook-telemetry](https://github.com/pragmatic-engineer/playbook-telemetry), its standalone token and cost dashboard.
+Homebrew tap for the [pragmatic-engineer/playbook](https://github.com/pragmatic-engineer/playbook) toolkit. It carries three tools:
+
+- `playbook`, the Claude Code plugin toolkit and its binary.
+- `playbook-telemetry`, the standalone token and cost dashboard, with the short alias `pbtop`.
+- `playbook-code`, the standalone code index and search, with the short alias `pbcode`. It has no formula until its first release.
 
 ## Install
 
@@ -29,17 +33,18 @@ Covers macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl 
 
 ## Formulas
 
-| Formula | Install | What it installs |
+| Formula | Install | Commands |
 |---|---|---|
-| `playbook` | `brew install pragmatic-engineer/tap/playbook` | The `playbook` binary. |
-| `playbook-telemetry` | `brew install pragmatic-engineer/tap/playbook-telemetry` | The `playbook-telemetry` binary and its short alias `pbtop`. You do not need it if you have `playbook`, which includes the same dashboard as `playbook usage`. |
+| `playbook` | `brew install pragmatic-engineer/tap/playbook` | `playbook` |
+| `playbook-telemetry` | `brew install pragmatic-engineer/tap/playbook-telemetry` | `pbtop` (short alias) and `playbook-telemetry` (long name for scripts) |
+| `playbook-code` | Not available until its first release. Use `playbook code` today. | `pbcode` (short alias) and `playbook-code` |
 
-The telemetry formula is in the middle of a rename from `playbook-usage`; until it lands, the formula file keeps the old name.
+Type the short alias, for example `pbtop` after installing `playbook-telemetry`. You do not need the standalone tools if you have `playbook`: `playbook usage` runs the same code as `pbtop`, and `playbook code` is what `pbcode` will be.
 
 ## Keeping the formula current
 
-The `release` workflow runs daily at 06:17 UTC and can be started by hand. It reads the latest `pragmatic-engineer/playbook` release and compares it with the formula. If the release is newer, it rewrites the URLs and checksums from that release's own `SHA256SUMS` (`.github/scripts/bump-formula.sh`) and commits the change to a `bump/v<version>` branch through the GitHub API and opens a pull request. It uses only the built-in `GITHUB_TOKEN`, so no secret is stored. GitHub signs the commit, so it shows as verified. A pull request opened with `GITHUB_TOKEN` gets its `pull_request` run held for approval, so the bump approves that run, waits for the `tests` workflow (audit, install and test on four platforms) to pass, and then squash merges the pull request through the API, which `protect-main` allows because the required checks passed on the branch head. Don't edit the formula's URLs or checksums by hand.
+A tool reaches the tap in one of two ways. The fast path is a `tool-released` `repository_dispatch` event that the tool's own release workflow sends, so the formula follows within minutes. The fallback is the `release` workflow's daily schedule at 06:17 UTC, which also can be started by hand. Both paths run the same job for each formula. It reads the latest release of that tool and compares it with the formula. If the release is newer, it rewrites the URLs and checksums from that release's own `SHA256SUMS` (`.github/scripts/bump-formula.sh`, which refuses to write a formula when a checksum is missing) and commits the change to a `bump/v<version>` branch through the GitHub API and opens a pull request. It uses only the built-in `GITHUB_TOKEN`, so no secret is stored. GitHub signs the commit, so it shows as verified. A pull request opened with `GITHUB_TOKEN` gets its `pull_request` run held for approval, so the bump approves that run, waits for the `tests` workflow (audit, install and test on four platforms) to pass, and then squash merges the pull request through the API, which `protect-main` allows because the required checks passed on the branch head. Don't edit the formula's URLs or checksums by hand.
 
 The `tests` workflow in this repo runs `brew audit --strict`, `brew install` and `brew test` on Linux and macOS (arm64 and x86_64) for every push, pull request and weekly. Bottles are not built, because the formula installs prebuilt binaries.
 
-If the formula is behind the latest release, check the latest `release` run in this repo.
+A formula that does not exist yet, such as `playbook-code`, is created from a template at the tool's first release. If a formula is behind the latest release, check the latest `release` run in this repo.
