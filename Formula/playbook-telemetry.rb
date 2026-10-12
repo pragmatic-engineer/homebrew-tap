@@ -34,7 +34,8 @@ class PlaybookTelemetry < Formula
 
   def caveats
     <<~EOS
-      `pbtop` is a short alias for `playbook-telemetry`. Both are installed.
+      Run `pbtop` to start. It is the short alias of `playbook-telemetry`,
+      which is the long name for scripts. Both are installed.
     EOS
   end
 
