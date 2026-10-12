@@ -10,21 +10,21 @@ class PlaybookTelemetry < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.4/playbook-telemetry-0.1.4-aarch64-apple-darwin.tar.gz"
-      sha256 "b5166ea5db3db6973b24cbcce86b6daeb7283b601ba6f70cae1d561763a5aeee"
+      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.5/playbook-telemetry-0.1.5-aarch64-apple-darwin.tar.gz"
+      sha256 "9b66798556302195d8847e9f2fe222285a5c3f6af5c6569c2addd77a18884896"
     else
-      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.4/playbook-telemetry-0.1.4-x86_64-apple-darwin.tar.gz"
-      sha256 "ed8f2e78caf558064cdd28ec0b4d375f1ca815b665c0bee1404b84fdfa978c95"
+      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.5/playbook-telemetry-0.1.5-x86_64-apple-darwin.tar.gz"
+      sha256 "f9af9d517e486cbac1c76625b0ae9b429cd84b0a25d8d8002c8268f6f5a117ed"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.4/playbook-telemetry-0.1.4-aarch64-unknown-linux-musl.tar.gz"
-      sha256 "24985dd2b35ffef25d698a1c1d9c19e63daef89202483dae702e08bde08cd88c"
+      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.5/playbook-telemetry-0.1.5-aarch64-unknown-linux-musl.tar.gz"
+      sha256 "94647b67c6611e53001af4f6021eb0d0534ad59e734092fd3a3b7b29fac26ad8"
     else
-      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.4/playbook-telemetry-0.1.4-x86_64-unknown-linux-musl.tar.gz"
-      sha256 "0624f99a5bcb748b3687a6a66ac7dc482dda83dad56fa9afed7f763834466c88"
+      url "https://github.com/pragmatic-engineer/playbook-telemetry/releases/download/v0.1.5/playbook-telemetry-0.1.5-x86_64-unknown-linux-musl.tar.gz"
+      sha256 "5385328367c1ce6df49afc9049a0527f3e208524750d005f231be68bf32252d4"
     end
   end
 
