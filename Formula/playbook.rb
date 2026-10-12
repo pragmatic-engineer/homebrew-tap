@@ -3,6 +3,11 @@ class Playbook < Formula
   homepage "https://github.com/pragmatic-engineer/playbook"
   license "Apache-2.0"
 
+  livecheck do
+    url :stable
+    strategy :github_latest
+  end
+
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.24.0/playbook-0.24.0-aarch64-apple-darwin"
@@ -32,6 +37,7 @@ class Playbook < Formula
       Run `playbook init` once to wire the safety hooks and put playbook on PATH
       for every shell, including the ones Claude Code starts for hooks.
       Until then the Claude Code plugin works, without the ccc and ccd launcher.
+      Installing never edits your Claude Code settings. Upgrade with `brew upgrade playbook`.
     EOS
   end
 
