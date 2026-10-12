@@ -34,7 +34,8 @@ jobs:
           brew test-bot --only-tap-syntax
 
   install:
-    needs: syntax
+    # Runs alongside syntax, not after it: the 65s style audit no longer sits
+    # in front of the install legs. Both are still required checks.
     strategy:
       fail-fast: false
       matrix:
