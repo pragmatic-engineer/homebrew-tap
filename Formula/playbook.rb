@@ -31,18 +31,21 @@ class Playbook < Formula
 
   def install
     bin.install Dir["playbook-*"].first => "playbook"
+    bin.install_symlink "playbook" => "pb"
   end
 
   def caveats
     <<~EOS
       Run `playbook init` once to wire the safety hooks and put playbook on PATH
       for every shell, including the ones Claude Code starts for hooks.
-      Until then the Claude Code plugin works, without the ccc and ccd launcher.
+      Start sessions with `playbook cc` or `playbook ccd`. `pb` is a short alias,
+      so `pb cc` and `pb ccd` work too.
       Installing never edits your Claude Code settings. Upgrade with `brew upgrade playbook`.
     EOS
   end
 
   test do
     assert_match version.to_s, shell_output("#{bin}/playbook --version")
+    assert_match version.to_s, shell_output("#{bin}/pb --version")
   end
 end
