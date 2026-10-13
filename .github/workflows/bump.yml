@@ -38,17 +38,23 @@ jobs:
           FORMULA: ${{ matrix.formula }}
         run: |
           set -euo pipefail
-          if ! tag="$(gh release view --repo "pragmatic-engineer/${FORMULA}" --json tagName --jq .tagName 2>/dev/null)"; then
+          info="$(.github/scripts/latest-release.sh "${FORMULA}")"
+          if [ -z "$info" ]; then
             echo "${FORMULA} has no release yet. Nothing to do."
             echo "outdated=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          latest="${tag#v}"
-          current="$(sed -n 's#.*download/v\([0-9][0-9.]*\)/.*#\1#p' "Formula/${FORMULA}.rb" 2>/dev/null | head -n1 || true)"
+          read -r source_repo tag_prefix latest <<<"$info"
+          echo "source_repo=${source_repo}" >> "$GITHUB_OUTPUT"
+          echo "tag_prefix=${tag_prefix}" >> "$GITHUB_OUTPUT"
+          current="$(sed -nE 's#.*/download/(telemetry-v|code-v|v)([0-9][0-9.]*)/.*#\2#p' "Formula/${FORMULA}.rb" 2>/dev/null | head -n1 || true)"
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
           echo "current=${current}" >> "$GITHUB_OUTPUT"
           if [ "$latest" = "$current" ]; then
             echo "Formula is current at ${current}."
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$current" ] && [ "$(printf '%s\n' "$current" "$latest" | sort -V | tail -n1)" != "$latest" ]; then
+            echo "::warning::Formula is at ${current}, newer than the latest release ${latest} found. Not downgrading."
             echo "outdated=false" >> "$GITHUB_OUTPUT"
           else
             echo "Formula is at ${current}, latest release is ${latest}."
@@ -60,6 +66,8 @@ jobs:
         env:
           VERSION: ${{ steps.release.outputs.latest }}
           FORMULA: ${{ matrix.formula }}
+          SOURCE_REPO: ${{ steps.release.outputs.source_repo }}
+          TAG_PREFIX: ${{ steps.release.outputs.tag_prefix }}
         run: |
           .github/scripts/bump-formula.sh "$VERSION" "Formula/${FORMULA}.rb"
 

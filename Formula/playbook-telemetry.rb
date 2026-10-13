@@ -5,7 +5,8 @@ class PlaybookTelemetry < Formula
 
   livecheck do
     url :stable
-    strategy :github_latest
+    strategy :github_releases
+    regex(/^(?:telemetry-)?v(\d+(?:\.\d+)+)$/i)
   end
 
   on_macos do
