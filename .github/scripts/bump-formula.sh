@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Update a formula to a release of the repo it installs from.
-# The formula name picks the source repo and the release asset suffix:
-#   playbook            pragmatic-engineer/playbook            raw binary
-#   playbook-telemetry  pragmatic-engineer/playbook-telemetry  .tar.gz holding playbook-telemetry and pbtop
-#   playbook-code       pragmatic-engineer/playbook-code       .tar.gz holding playbook-code and pbcode
+# The formula name picks the release asset suffix and the default source:
+#   playbook            pragmatic-engineer/playbook, tags vX.Y.Z            raw binary
+#   playbook-telemetry  pragmatic-engineer/playbook, tags telemetry-vX.Y.Z  .tar.gz holding playbook-telemetry and pbtop
+#   playbook-code       pragmatic-engineer/playbook, tags code-vX.Y.Z       .tar.gz holding playbook-code and pbcode
+# SOURCE_REPO and TAG_PREFIX override the source (latest-release.sh prints them),
+# which lets a formula keep following a legacy repo until its first prefixed tag.
 # A tool formula that does not exist yet is created from a template at its first release.
 # Usage: bump-formula.sh <version-without-v> [formula-path]
 # URLs and checksums come from the release's own SHA256SUMS. Nothing is hand-edited.
@@ -13,14 +15,14 @@ version="${1:?usage: bump-formula.sh <version> [formula-path]}"
 formula="${2:-Formula/playbook.rb}"
 name="$(basename "$formula" .rb)"
 case "$name" in
-  playbook) repo="playbook"; suffix="" ;;
+  playbook) repo="playbook"; prefix="v"; suffix="" ;;
   playbook-telemetry)
-    repo="playbook-telemetry"; suffix=".tar.gz"
+    repo="playbook"; prefix="telemetry-v"; suffix=".tar.gz"
     class_name="PlaybookTelemetry"; alias_bin="pbtop"
     desc="Usage and cost tracking for Claude Code in a terminal dashboard"
     ;;
   playbook-code)
-    repo="playbook-code"; suffix=".tar.gz"
+    repo="playbook"; prefix="code-v"; suffix=".tar.gz"
     class_name="PlaybookCode"; alias_bin="pbcode"
     desc="Local code index and search for coding agents"
     ;;
@@ -29,7 +31,10 @@ case "$name" in
     exit 1
     ;;
 esac
-base="https://github.com/pragmatic-engineer/${repo}/releases/download/v${version}"
+repo="${SOURCE_REPO:-$repo}"
+prefix="${TAG_PREFIX:-$prefix}"
+tag="${prefix}${version}"
+base="https://github.com/pragmatic-engineer/${repo}/releases/download/${tag}"
 targets=(aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-musl x86_64-unknown-linux-musl)
 
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -80,7 +85,7 @@ cp "$formula" "$tmp"
 for target in "${targets[@]}"; do
   sha="$(awk -v f="${name}-${version}-${target}${suffix}" '$2 == f { print $1 }' <<<"$sums")"
   if [[ ! "$sha" =~ ^[0-9a-f]{64}$ ]]; then
-    echo "::error::missing or malformed checksum for ${target} in v${version} SHA256SUMS. Refusing to write a partial formula." >&2
+    echo "::error::missing or malformed checksum for ${target} in ${tag} SHA256SUMS. Refusing to write a partial formula." >&2
     exit 1
   fi
   # Rewrite the url line for this target, and the sha256 line that follows it.
@@ -92,9 +97,9 @@ for target in "${targets[@]}"; do
   mv "${tmp}.new" "$tmp"
 done
 
-rewritten="$(grep -c "/download/v${version}/${name}-${version}-" "$tmp" || true)"
+rewritten="$(grep -c "/download/${tag}/${name}-${version}-" "$tmp" || true)"
 if [[ "$rewritten" -ne ${#targets[@]} ]]; then
-  echo "::error::expected ${#targets[@]} url lines for v${version} after the rewrite, found ${rewritten}. The formula layout changed. Refusing to write." >&2
+  echo "::error::expected ${#targets[@]} url lines for ${tag} after the rewrite, found ${rewritten}. The formula layout changed. Refusing to write." >&2
   exit 1
 fi
 
