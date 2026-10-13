@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: bump
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -83,6 +83,16 @@ jobs:
           FILE_PATH="Formula/${FORMULA}.rb"
           branch="bump/${FORMULA}-v${VERSION}"
           title="chore(deps): bump ${FORMULA} to ${VERSION}"
+
+          # A bump pull request that is still open is left alone: the run
+          # that opened it, or a person, finishes it. Without this, a release
+          # whose tests keep failing would close and reopen its pull request
+          # on every scheduled run.
+          open_pr="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$open_pr" ]; then
+            echo "::warning::pull request #${open_pr} for ${branch} is still open. Leaving it for a person or the next run after it closes."
+            exit 0
+          fi
 
           # Drop a branch left behind by a failed run.
           if gh api "repos/${REPO}/git/ref/heads/${branch}" >/dev/null 2>&1; then
