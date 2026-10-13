@@ -2,10 +2,12 @@ name: release
 
 on:
   schedule:
-    - cron: "17 6 * * *"
+    # Every 30 minutes. A run with nothing outdated stops after one release
+    # lookup per formula and opens nothing.
+    - cron: "7,37 * * * *"
   workflow_dispatch:
-  # Fast path: a tool's own release workflow can send this event so the
-  # formula follows within minutes. The schedule above stays as the fallback.
+  # Optional: anything that sends this event gets an immediate check. The
+  # schedule above is what normally picks up a release.
   repository_dispatch:
     types: [tool-released]
 
