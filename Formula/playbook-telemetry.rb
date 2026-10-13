@@ -1,12 +1,12 @@
 class PlaybookTelemetry < Formula
   desc "Usage and cost tracking for Claude Code in a terminal dashboard"
-  homepage "https://github.com/pragmatic-engineer/playbook-telemetry"
+  homepage "https://github.com/pragmatic-engineer/playbook"
   license "Apache-2.0"
 
   livecheck do
     url :stable
     strategy :github_releases
-    regex(/^(?:telemetry-)?v(\d+(?:\.\d+)+)$/i)
+    regex(/^telemetry-v(\d+(?:\.\d+)+)$/i)
   end
 
   on_macos do
