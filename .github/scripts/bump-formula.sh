@@ -50,7 +50,7 @@ write_template() {
     printf '  desc "%s"\n' "$desc"
     printf '  homepage "https://github.com/pragmatic-engineer/%s"\n' "$repo"
     printf '  license "Apache-2.0"\n\n'
-    printf '  livecheck do\n    url :stable\n    strategy :github_latest\n  end\n'
+    printf '  livecheck do\n    url :stable\n    strategy :github_releases\n    regex(/^%sv(\\d+(?:\\.\\d+)+)$/i)\n  end\n' "${prefix%v}"
     local os cpu_arm cpu_x t_arm t_x
     for os in macos linux; do
       if [[ "$os" = macos ]]; then t_arm=aarch64-apple-darwin; t_x=x86_64-apple-darwin

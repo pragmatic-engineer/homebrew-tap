@@ -25,7 +25,7 @@ esac
 for candidate in "${candidates[@]}"; do
   read -r repo prefix <<<"$candidate"
   tag="$(gh release list --repo "pragmatic-engineer/${repo}" --limit 100 --json tagName,isDraft,isPrerelease \
-    --jq "[.[] | select(.isDraft == false and .isPrerelease == false) | .tagName | select(test(\"^${prefix}[0-9]+\\\\.[0-9]+\\\\.[0-9]+\$\"))] | first // empty" 2>/dev/null || true)"
+    --jq "[.[] | select(.isDraft == false and .isPrerelease == false) | .tagName | select(test(\"^${prefix}[0-9]+\\\\.[0-9]+\\\\.[0-9]+\$\"))] | first // empty")"
   if [ -n "$tag" ]; then
     printf '%s %s %s\n' "$repo" "$prefix" "${tag#"$prefix"}"
     exit 0

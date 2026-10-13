@@ -44,7 +44,8 @@ jobs:
           FORMULA: ${{ matrix.formula }}
         run: |
           set -euo pipefail
-          if ! info="$(.github/scripts/latest-release.sh "${FORMULA}")" || [ -z "$info" ]; then
+          info="$(.github/scripts/latest-release.sh "${FORMULA}")"
+          if [ -z "$info" ]; then
             echo "${FORMULA} has no release yet. Nothing to do."
             echo "outdated=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -57,6 +58,9 @@ jobs:
           echo "current=${current}" >> "$GITHUB_OUTPUT"
           if [ "$latest" = "$current" ]; then
             echo "Formula is current at ${current}."
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$current" ] && [ "$(printf '%s\n' "$current" "$latest" | sort -V | tail -n1)" != "$latest" ]; then
+            echo "::warning::Formula is at ${current}, newer than the latest release ${latest} found. Not downgrading."
             echo "outdated=false" >> "$GITHUB_OUTPUT"
           else
             echo "Formula is at ${current}, latest release is ${latest}."
