@@ -56,7 +56,10 @@ jobs:
           release_owns() {
             local open published age
             open="$(gh pr list --repo "$REPO" --head "release/v$1" --state open --app igorjs \
-              --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')"
+              --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')" || {
+              echo "Could not list the release pull requests. The next run checks again."
+              return 0
+            }
             if [ -n "$open" ]; then
               echo "Pull request #${open} from the playbook release updates ${FORMULA} to $1."
               return 0
