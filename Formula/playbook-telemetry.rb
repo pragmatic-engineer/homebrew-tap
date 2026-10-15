@@ -34,7 +34,10 @@ class PlaybookTelemetry < Formula
   end
 
   def caveats
-    <<~EOS
+    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.
+    breaking = ""
+    # END breaking changes
+    breaking + <<~EOS
       Run `pbtop` to start. It is the short alias of `playbook-telemetry`,
       which is the long name for scripts. Both are installed.
     EOS

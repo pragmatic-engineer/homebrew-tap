@@ -9,15 +9,18 @@
 # A tool formula that does not exist yet is created from a template at its first release.
 # Usage: bump-formula.sh <version-without-v> [formula-path]
 # URLs and checksums come from the release's own SHA256SUMS. Nothing is hand-edited.
+# The caveats start with the release's breaking changes, read from its
+# breaking-changes.json asset after a check against SHA256SUMS. A release with
+# no entries for the formula clears them (ADR 0035 in pragmatic-engineer/playbook).
 set -euo pipefail
 
 version="${1:?usage: bump-formula.sh <version> [formula-path]}"
 formula="${2:-Formula/playbook.rb}"
 name="$(basename "$formula" .rb)"
 case "$name" in
-  playbook) repo="playbook"; prefix="v"; suffix="" ;;
+  playbook) repo="playbook"; prefix="v"; suffix=""; component="playbook" ;;
   playbook-telemetry)
-    repo="playbook"; prefix="telemetry-v"; suffix=".tar.gz"
+    repo="playbook"; prefix="telemetry-v"; suffix=".tar.gz"; component="telemetry"
     class_name="PlaybookTelemetry"; alias_bin="pbtop"
     desc="Usage and cost tracking for Claude Code in a terminal dashboard"
     ;;
@@ -35,6 +38,9 @@ repo="${SOURCE_REPO:-$repo}"
 prefix="${TAG_PREFIX:-$prefix}"
 tag="${prefix}${version}"
 base="https://github.com/pragmatic-engineer/${repo}/releases/download/${tag}"
+# DOWNLOAD_BASE reads SHA256SUMS and breaking-changes.json from another place,
+# such as a file:// folder in a local test. The formula URLs keep the real base.
+fetch_base="${DOWNLOAD_BASE:-$base}"
 targets=(aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-musl x86_64-unknown-linux-musl)
 
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -62,7 +68,7 @@ write_template() {
       printf '    end\n  end\n'
     done
     printf '\n  def install\n    bin.install "%s", "%s"\n  end\n' "$name" "$alias_bin"
-    printf '\n  def caveats\n    <<~EOS\n      `%s` is a short alias for `%s`. Both are installed.\n    EOS\n  end\n' "$alias_bin" "$name"
+    printf '\n  def caveats\n    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.\n    breaking = ""\n    # END breaking changes\n    breaking + <<~EOS\n      `%s` is a short alias for `%s`. Both are installed.\n    EOS\n  end\n' "$alias_bin" "$name"
     printf '\n  test do\n    assert_match version.to_s, shell_output("#{bin}/%s --version")\n' "$name"
     printf '    assert_match version.to_s, shell_output("#{bin}/%s --version")\n  end\nend\n' "$alias_bin"
   } >"$formula"
@@ -76,10 +82,12 @@ if [[ ! -f "$formula" ]]; then
   write_template
 fi
 
-sums="$(curl -fsSL --retry 3 --retry-delay 5 "${base}/SHA256SUMS")"
+sums="$(curl -fsSL --retry 3 --retry-delay 5 "${fetch_base}/SHA256SUMS")"
 
 tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
+block="$(mktemp)"
+json="$(mktemp)"
+trap 'rm -f "$tmp" "$block" "$json"' EXIT
 cp "$formula" "$tmp"
 
 for target in "${targets[@]}"; do
@@ -102,5 +110,61 @@ if [[ "$rewritten" -ne ${#targets[@]} ]]; then
   echo "::error::expected ${#targets[@]} url lines for ${tag} after the rewrite, found ${rewritten}. The formula layout changed. Refusing to write." >&2
   exit 1
 fi
+
+# The breaking changes block. Its text goes into a heredoc that does not
+# interpolate, and a line with a backslash, `#{` or a control character is
+# refused, so nothing in it runs as Ruby.
+breaking_block() {
+  local want got lines
+  if [[ -z "${component:-}" ]]; then
+    return 0
+  fi
+  want="$(awk '$2 == "breaking-changes.json" { print $1 }' <<<"$sums")"
+  if [[ -z "$want" ]]; then
+    echo "${tag} SHA256SUMS does not list breaking-changes.json, so the caveats have no breaking changes." >&2
+    return 0
+  fi
+  curl -fsSL --retry 3 --retry-delay 5 -o "$json" "${fetch_base}/breaking-changes.json" >/dev/null
+  if command -v sha256sum >/dev/null; then
+    got="$(sha256sum "$json" | awk '{ print $1 }')"
+  else
+    got="$(shasum -a 256 "$json" | awk '{ print $1 }')"
+  fi
+  if [[ "$got" != "$want" ]]; then
+    echo "::error::breaking-changes.json does not match ${tag} SHA256SUMS. Refusing to write." >&2
+    return 1
+  fi
+  lines="$(jq -r --arg c "$component" --arg v "$version" \
+    '.entries[] | select(.component == $c and .version == $v) | "- \(.summary)", "  Action: \(.action)"' "$json")"
+  if [[ -z "$lines" ]]; then
+    return 0
+  fi
+  if LC_ALL=C grep -Eq '[[:cntrl:]]|\\|#\{' <<<"$lines"; then
+    echo "::error::an entry in breaking-changes.json has a backslash, #{ or a control character. Refusing to write." >&2
+    return 1
+  fi
+  printf "    breaking = <<~'BREAKING'\n"
+  printf '      Breaking changes in %s %s:\n' "$name" "$version"
+  sed 's/^/      /' <<<"$lines"
+  if [[ "$name" = playbook ]]; then
+    printf '      To see older ones, run `playbook breaking --since <your previous version>`.\n'
+  fi
+  printf '\n    BREAKING\n'
+}
+
+breaking_block >"$block"
+if [[ ! -s "$block" ]]; then
+  printf '    breaking = ""\n' >"$block"
+fi
+if [[ "$(grep -c '# BEGIN breaking changes\.' "$tmp")" -ne 1 || "$(grep -c '# END breaking changes' "$tmp")" -ne 1 ]]; then
+  echo "::error::${formula} needs one BEGIN and one END breaking changes marker in its caveats. Refusing to write." >&2
+  exit 1
+fi
+awk -v block="$block" '
+  /# BEGIN breaking changes\./ { print; while ((getline line < block) > 0) print line; skip = 1; next }
+  /# END breaking changes/ { skip = 0 }
+  !skip { print }
+' "$tmp" >"${tmp}.new"
+mv "${tmp}.new" "$tmp"
 
 cp "$tmp" "$formula"
