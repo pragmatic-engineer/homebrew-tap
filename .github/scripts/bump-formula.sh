@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Update a formula to a release of the repo it installs from.
 # The formula name picks the release asset suffix and the default source:
-#   playbook            pragmatic-engineer/playbook, tags vX.Y.Z            raw binary
-#   playbook-telemetry  pragmatic-engineer/playbook, tags telemetry-vX.Y.Z  .tar.gz holding playbook-telemetry and pbtop
-#   playbook-code       pragmatic-engineer/playbook, tags code-vX.Y.Z       .tar.gz holding playbook-code and pbcode
+#   playbook            pragmatic-engineer/playbook, tags vX.Y.Z       raw binary
+#   playbook-telemetry  pragmatic-engineer/playbook, tags vX.Y.Z       .tar.gz holding playbook-telemetry and pbtop
+#   pbtop               pragmatic-engineer/playbook, tags vX.Y.Z       .tar.gz holding pbtop alone
+#   playbook-code       pragmatic-engineer/playbook, tags code-vX.Y.Z  .tar.gz holding playbook-code and pbcode
+# Since playbook 0.34.0 one v release ships every tool. playbook-telemetry
+# releases before that used telemetry-v tags, which TAG_PREFIX selects.
 # SOURCE_REPO and TAG_PREFIX override the source (latest-release.sh prints them),
 # which lets a formula keep following a legacy repo until its first prefixed tag.
 # A tool formula that does not exist yet is created from a template at its first release.
@@ -21,9 +24,14 @@ name="$(basename "$formula" .rb)"
 case "$name" in
   playbook) repo="playbook"; prefix="v"; suffix=""; component="playbook" ;;
   playbook-telemetry)
-    repo="playbook"; prefix="telemetry-v"; suffix=".tar.gz"; component="telemetry"
-    class_name="PlaybookTelemetry"; alias_bin="pbtop"
+    repo="playbook"; prefix="v"; suffix=".tar.gz"; component="telemetry"
+    class_name="PlaybookTelemetry"; alias_bin="pbtop"; conflicts="pbtop"
     desc="Usage and cost tracking for Claude Code in a terminal dashboard"
+    ;;
+  pbtop)
+    repo="playbook"; prefix="v"; suffix=".tar.gz"; component="telemetry"
+    class_name="Pbtop"; alias_bin=""; conflicts="playbook-telemetry"
+    desc="Terminal dashboard of Claude Code token use and cost"
     ;;
   playbook-code)
     repo="playbook"; prefix="code-v"; suffix=".tar.gz"
@@ -68,10 +76,16 @@ write_template() {
       printf '      url "%s/%s-%s-%s%s"\n      sha256 "%s"\n' "$base" "$name" "$version" "$t_x" "$suffix" "$zero"
       printf '    end\n  end\n'
     done
-    printf '\n  def install\n    bin.install "%s", "%s"\n  end\n' "$name" "$alias_bin"
-    printf '\n  def caveats\n    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.\n    breaking = ""\n    # END breaking changes\n    breaking + <<~EOS\n      `%s` is a short alias for `%s`. Both are installed.\n    EOS\n  end\n' "$alias_bin" "$name"
-    printf '\n  test do\n    assert_match version.to_s, shell_output("#{bin}/%s --version")\n' "$name"
-    printf '    assert_match version.to_s, shell_output("#{bin}/%s --version")\n  end\nend\n' "$alias_bin"
+    if [[ -n "$alias_bin" ]]; then
+      printf '\n  def install\n    bin.install "%s", "%s"\n  end\n' "$name" "$alias_bin"
+      printf '\n  def caveats\n    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.\n    breaking = ""\n    # END breaking changes\n    breaking + <<~EOS\n      `%s` is a short alias for `%s`. Both are installed.\n    EOS\n  end\n' "$alias_bin" "$name"
+      printf '\n  test do\n    assert_match version.to_s, shell_output("#{bin}/%s --version")\n' "$name"
+      printf '    assert_match version.to_s, shell_output("#{bin}/%s --version")\n  end\nend\n' "$alias_bin"
+    else
+      printf '\n  def install\n    bin.install "%s"\n  end\n' "$name"
+      printf '\n  def caveats\n    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.\n    breaking = ""\n    # END breaking changes\n    breaking + <<~EOS\n      `%s` also installs `%s`, so install one of the two.\n    EOS\n  end\n' "${conflicts:-$name}" "$name"
+      printf '\n  test do\n    assert_match version.to_s, shell_output("#{bin}/%s --version")\n  end\nend\n' "$name"
+    fi
   } >"$formula"
 }
 
@@ -105,6 +119,24 @@ for target in "${targets[@]}"; do
   ' "$tmp" >"${tmp}.new"
   mv "${tmp}.new" "$tmp"
 done
+
+# The livecheck regex follows the tag prefix, so a formula that moves from
+# telemetry-v to v tags checks the right releases.
+LIVECHECK_RE="    regex(/^${prefix}(\\d+(?:\\.\\d+)+)\$/i)" awk '
+  $1 ~ /^regex\(\/\^/ { print ENVIRON["LIVECHECK_RE"]; next } { print }
+' "$tmp" >"${tmp}.new"
+mv "${tmp}.new" "$tmp"
+
+# pbtop and playbook-telemetry both install pbtop. Each gets conflicts_with
+# once the other formula exists, since the audit fails on a conflict with a
+# formula it cannot find.
+if [[ -n "${conflicts:-}" && -f "$(dirname "$formula")/${conflicts}.rb" ]] && ! grep -q '^  conflicts_with ' "$tmp"; then
+  CONFLICT_LINE="  conflicts_with \"${conflicts}\", because: \"both install \`pbtop\`\"" awk '
+    !done && $0 == "  def install" { print ENVIRON["CONFLICT_LINE"]; print ""; done = 1 }
+    { print }
+  ' "$tmp" >"${tmp}.new"
+  mv "${tmp}.new" "$tmp"
+fi
 
 rewritten="$(grep -c "/download/${tag}/${name}-${version}-" "$tmp" || true)"
 if [[ "$rewritten" -ne ${#targets[@]} ]]; then
