@@ -11,7 +11,8 @@
 # URLs and checksums come from the release's own SHA256SUMS. Nothing is hand-edited.
 # The caveats start with the release's breaking changes, read from its
 # breaking-changes.json asset after a check against SHA256SUMS. A release with
-# no entries for the formula clears them (ADR 0035 in pragmatic-engineer/playbook).
+# no entries for the formula clears them, and so does an older release whose
+# SHA256SUMS does not list the file (ADR 0035 in pragmatic-engineer/playbook).
 set -euo pipefail
 
 version="${1:?usage: bump-formula.sh <version> [formula-path]}"
@@ -111,12 +112,18 @@ if [[ "$rewritten" -ne ${#targets[@]} ]]; then
   exit 1
 fi
 
-# The breaking changes block. Its text goes into a heredoc that does not
-# interpolate, and a line with a backslash, `#{` or a control character is
-# refused, so nothing in it runs as Ruby.
+# The breaking changes block. The entry layout mirrors notes() in
+# scripts/check-breaking.sh of pragmatic-engineer/playbook. The text goes into
+# a plain squiggly heredoc, which Homebrew's style check prefers. So jq refuses
+# a field that Ruby would read as code or that the audit rejects: a control
+# character (a newline included, since it could end the heredoc early), a
+# backslash, `#{`, `#@`, `#$` or the word setuid. Trailing spaces are trimmed.
+# Only the playbook formula names `playbook breaking`, since that command lists
+# playbook entries only.
 breaking_block() {
   local want got lines
   if [[ -z "${component:-}" ]]; then
+    echo "${name} has no breaking changes component, so its caveats have none." >&2
     return 0
   fi
   want="$(awk '$2 == "breaking-changes.json" { print $1 }' <<<"$sums")"
@@ -134,20 +141,24 @@ breaking_block() {
     echo "::error::breaking-changes.json does not match ${tag} SHA256SUMS. Refusing to write." >&2
     return 1
   fi
-  lines="$(jq -r --arg c "$component" --arg v "$version" \
-    '.entries[] | select(.component == $c and .version == $v) | "- \(.summary)", "  Action: \(.action)"' "$json")"
+  if ! lines="$(jq -r --arg c "$component" --arg v "$version" '
+      def clean:
+        if type == "string" and (test("[\\x00-\\x1f\\x7f\\\\]|#[{@$]|setuid"; "i") | not)
+        then sub("\\s+$"; "") else error("unsafe text in breaking-changes.json: \(.)") end;
+      .entries[] | select(.component == $c and .version == $v)
+      | "- \(.summary | clean)", "  Action: \(.action | clean)"
+    ' "$json")"; then
+    echo "::error::an entry in breaking-changes.json has text the caveats cannot hold. Refusing to write." >&2
+    return 1
+  fi
   if [[ -z "$lines" ]]; then
     return 0
   fi
-  if LC_ALL=C grep -Eq '[[:cntrl:]]|\\|#\{' <<<"$lines"; then
-    echo "::error::an entry in breaking-changes.json has a backslash, #{ or a control character. Refusing to write." >&2
-    return 1
-  fi
-  printf "    breaking = <<~'BREAKING'\n"
+  printf '    breaking = <<~BREAKING\n'
   printf '      Breaking changes in %s %s:\n' "$name" "$version"
   sed 's/^/      /' <<<"$lines"
   if [[ "$name" = playbook ]]; then
-    printf '      To see older ones, run `playbook breaking --since <your previous version>`.\n'
+    printf '      To see breaking changes from earlier releases, run `playbook breaking --since <your previous version>`.\n'
   fi
   printf '\n    BREAKING\n'
 }
@@ -156,13 +167,15 @@ breaking_block >"$block"
 if [[ ! -s "$block" ]]; then
   printf '    breaking = ""\n' >"$block"
 fi
-if [[ "$(grep -c '# BEGIN breaking changes\.' "$tmp")" -ne 1 || "$(grep -c '# END breaking changes' "$tmp")" -ne 1 ]]; then
+begin_marker='^    # BEGIN breaking changes\.'
+end_marker='^    # END breaking changes$'
+if [[ "$(grep -c "$begin_marker" "$tmp")" -ne 1 || "$(grep -c "$end_marker" "$tmp")" -ne 1 ]]; then
   echo "::error::${formula} needs one BEGIN and one END breaking changes marker in its caveats. Refusing to write." >&2
   exit 1
 fi
-awk -v block="$block" '
-  /# BEGIN breaking changes\./ { print; while ((getline line < block) > 0) print line; skip = 1; next }
-  /# END breaking changes/ { skip = 0 }
+awk -v block="$block" -v begin="$begin_marker" -v end="$end_marker" '
+  $0 ~ begin { print; while ((getline line < block) > 0) print line; skip = 1; next }
+  $0 ~ end { skip = 0 }
   !skip { print }
 ' "$tmp" >"${tmp}.new"
 mv "${tmp}.new" "$tmp"

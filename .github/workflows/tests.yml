@@ -33,6 +33,29 @@ jobs:
           brew test-bot --only-setup
           brew test-bot --only-tap-syntax
 
+  # Runs the breaking changes block of bump-formula.sh against local release
+  # folders, then checks the style of a formula with a filled block, the shape
+  # a real release with breaking changes writes.
+  bump-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@9ffcbcc2c89631400988e8d4b1e3ac17dbbe3fe9 # main
+
+      - name: Check out the tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test the breaking changes block
+        run: .github/scripts/test-bump-formula.sh --keep
+
+      - name: Style check the filled formula
+        run: |
+          brew test-bot --only-cleanup-before
+          brew test-bot --only-setup
+          brew test-bot --only-tap-syntax
+
   install:
     # Runs alongside syntax, not after it: the 65s style audit no longer sits
     # in front of the install legs. Both are still required checks.
