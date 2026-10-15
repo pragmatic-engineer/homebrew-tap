@@ -13,10 +13,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: release-tag
-  cancel-in-progress: false
-
 jobs:
   tag:
     # Only a merged pull request from the app, on a release branch of this
@@ -28,6 +24,11 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # On the job, so only release runs queue here and a closed pull request
+    # of another kind cannot cancel a pending one.
+    concurrency:
+      group: release-tag
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -35,6 +36,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 2
           persist-credentials: false
 
       - name: Tag and release
@@ -53,6 +55,22 @@ jobs:
           fi
           if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::pull request #${PR} has no merge commit." >&2
+            exit 1
+          fi
+
+          # The tag covers formula changes only, even when someone pushed to
+          # the app's branch before the merge.
+          other="$(git diff --name-only HEAD^ HEAD | grep -v '^Formula/[a-z-]*\.rb$' || true)"
+          if [ -n "$other" ]; then
+            echo "::error::#${PR} changes more than formulas: ${other//$'\n'/ }. Nothing was changed." >&2
+            exit 1
+          fi
+
+          # The merge commit must be on main, so the tag never lands on a
+          # commit outside its history.
+          status="$(gh api "repos/${REPO}/compare/${SHA}...main" --jq .status)"
+          if [ "$status" != identical ] && [ "$status" != ahead ]; then
+            echo "::error::${SHA} is not on main (compare says ${status}). Nothing was changed." >&2
             exit 1
           fi
 

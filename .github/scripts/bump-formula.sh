@@ -76,9 +76,6 @@ write_template() {
       printf '      url "%s/%s-%s-%s%s"\n      sha256 "%s"\n' "$base" "$name" "$version" "$t_x" "$suffix" "$zero"
       printf '    end\n  end\n'
     done
-    if [[ -n "${conflicts:-}" ]]; then
-      printf '\n  conflicts_with "%s", because: "both install `pbtop`"\n' "$conflicts"
-    fi
     if [[ -n "$alias_bin" ]]; then
       printf '\n  def install\n    bin.install "%s", "%s"\n  end\n' "$name" "$alias_bin"
       printf '\n  def caveats\n    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.\n    breaking = ""\n    # END breaking changes\n    breaking + <<~EOS\n      `%s` is a short alias for `%s`. Both are installed.\n    EOS\n  end\n' "$alias_bin" "$name"
@@ -129,6 +126,17 @@ LIVECHECK_RE="    regex(/^${prefix}(\\d+(?:\\.\\d+)+)\$/i)" awk '
   $1 ~ /^regex\(\/\^/ { print ENVIRON["LIVECHECK_RE"]; next } { print }
 ' "$tmp" >"${tmp}.new"
 mv "${tmp}.new" "$tmp"
+
+# pbtop and playbook-telemetry both install pbtop. Each gets conflicts_with
+# once the other formula exists, since the audit fails on a conflict with a
+# formula it cannot find.
+if [[ -n "${conflicts:-}" && -f "$(dirname "$formula")/${conflicts}.rb" ]] && ! grep -q '^  conflicts_with ' "$tmp"; then
+  CONFLICT_LINE="  conflicts_with \"${conflicts}\", because: \"both install \`pbtop\`\"" awk '
+    !done && $0 == "  def install" { print ENVIRON["CONFLICT_LINE"]; print ""; done = 1 }
+    { print }
+  ' "$tmp" >"${tmp}.new"
+  mv "${tmp}.new" "$tmp"
+fi
 
 rewritten="$(grep -c "/download/${tag}/${name}-${version}-" "$tmp" || true)"
 if [[ "$rewritten" -ne ${#targets[@]} ]]; then

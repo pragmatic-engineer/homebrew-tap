@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Tests the breaking changes block of bump-formula.sh against release folders
 # built here and read through DOWNLOAD_BASE, so nothing touches the network.
-# It also checks the pbtop template and the move of playbook-telemetry to v tags.
+# It also checks the pbtop template, the move of playbook-telemetry to v tags
+# and latest-release.sh against a stub gh.
 # Usage: test-bump-formula.sh [--keep]
 # With --keep, Formula/playbook.rb is left with a filled block and
-# Formula/pbtop.rb is written from the template, so a style and audit run can
-# check what a real release would write.
+# Formula/pbtop.rb and Formula/playbook-telemetry.rb are left as a release
+# writes them, so a style and audit run can check them.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -114,12 +115,29 @@ tool_release() {
   printf '%s' "$dir"
 }
 
-mkdir -p "$work/p"
+conflict_telemetry='  conflicts_with "playbook-telemetry", because: "both install `pbtop`"'
+conflict_pbtop='  conflicts_with "pbtop", because: "both install `pbtop`"'
+
+# pbtop alone: no conflicts_with, since the audit fails on a conflict with a
+# formula it cannot find.
+mkdir -p "$work/alone"
 dir="$(tool_release pbtop 9.7.0)"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$work/alone/pbtop.rb" >/dev/null 2>"$work/err" \
+  && ! grep -q '^  conflicts_with ' "$work/alone/pbtop.rb"; then
+  pass "pbtop alone gets no conflicts_with"
+else
+  fail "pbtop alone gets no conflicts_with"
+fi
+
+# The order of a release: pbtop is written next to playbook-telemetry, which
+# then moves to v tags. Each names the other.
+mkdir -p "$work/p"
+telemetry="$work/p/playbook-telemetry.rb"
+cp "$root/Formula/playbook-telemetry.rb" "$telemetry"
 pbtop="$work/p/pbtop.rb"
 if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$pbtop" >/dev/null 2>"$work/err" \
   && grep -qx '    bin.install "pbtop"' "$pbtop" \
-  && grep -qx '  conflicts_with "playbook-telemetry", because: "both install `pbtop`"' "$pbtop" \
+  && grep -qxF "$conflict_telemetry" "$pbtop" \
   && [[ "$(grep -c '/download/v9.7.0/pbtop-9.7.0-' "$pbtop")" -eq 4 ]] \
   && ! grep -q '0\{64\}' "$pbtop" \
   && ruby -c "$pbtop" >/dev/null; then
@@ -128,22 +146,75 @@ else
   fail "the pbtop formula is written from its template"
 fi
 
-dir="$(tool_release playbook-telemetry 9.8.0)"
-telemetry="$work/p/playbook-telemetry.rb"
-cp "$root/Formula/playbook-telemetry.rb" "$telemetry"
-if DOWNLOAD_BASE="file://$dir" bash "$script" 9.8.0 "$telemetry" >/dev/null 2>"$work/err" \
+dir="$(tool_release playbook-telemetry 9.7.0)"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$telemetry" >/dev/null 2>"$work/err" \
   && grep -qxF '    regex(/^v(\d+(?:\.\d+)+)$/i)' "$telemetry" \
-  && [[ "$(grep -c '/download/v9.8.0/playbook-telemetry-9.8.0-' "$telemetry")" -eq 4 ]] \
+  && [[ "$(grep -c '/download/v9.7.0/playbook-telemetry-9.7.0-' "$telemetry")" -eq 4 ]] \
+  && [[ "$(grep -cxF "$conflict_pbtop" "$telemetry")" -eq 1 ]] \
+  && DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$telemetry" >/dev/null 2>"$work/err" \
+  && [[ "$(grep -c '^  conflicts_with ' "$telemetry")" -eq 1 ]] \
   && ruby -c "$telemetry" >/dev/null; then
-  pass "playbook-telemetry moves to v tags, livecheck included"
+  pass "playbook-telemetry moves to v tags and names pbtop once"
 else
-  fail "playbook-telemetry moves to v tags, livecheck included"
+  fail "playbook-telemetry moves to v tags and names pbtop once"
+fi
+
+# latest-release.sh against a stub gh. GH_RELEASES is the release list as
+# JSON, and GH_ASSETS_<version with _> the asset names of a release.
+latest="$root/.github/scripts/latest-release.sh"
+mkdir -p "$work/bin"
+cat >"$work/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+repo=""; jq_filter=""; tag=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --repo) repo="$2"; shift ;;
+    --jq) jq_filter="$2"; shift ;;
+    release|list|view|--json|--limit) ;;
+    tagName,isDraft,isPrerelease|assets|100) ;;
+    *) tag="$1" ;;
+  esac
+  shift
+done
+if [ "$repo" != pragmatic-engineer/playbook ]; then
+  echo "GraphQL: Could not resolve to a Repository with the name '${repo}'." >&2
+  exit 1
+fi
+if [ -z "$tag" ]; then
+  jq -r "$jq_filter" <<<"$GH_RELEASES"
+else
+  var="GH_ASSETS_${tag//./_}"
+  printf '%s\n' ${!var:-}
+fi
+STUB
+chmod +x "$work/bin/gh"
+releases='[{"tagName":"v9.1.0","isDraft":false,"isPrerelease":false},
+  {"tagName":"v9.0.0","isDraft":false,"isPrerelease":false},
+  {"tagName":"telemetry-v0.2.0","isDraft":false,"isPrerelease":false}]'
+lookup() { PATH="$work/bin:$PATH" GH_RELEASES="$releases" bash "$latest" "$1" 2>"$work/err"; }
+
+if [[ "$(GH_ASSETS_v9_1_0="playbook-9.1.0-x86_64-unknown-linux-musl" \
+  GH_ASSETS_v9_0_0="pbtop-9.0.0-x86_64-unknown-linux-musl.tar.gz" lookup pbtop)" = "playbook v 9.0.0" ]]; then
+  pass "pbtop skips a v release without its archive"
+else
+  fail "pbtop skips a v release without its archive"
+fi
+if [[ "$(lookup playbook-telemetry)" = "playbook telemetry-v 0.2.0" ]]; then
+  pass "playbook-telemetry falls back to telemetry-v without a v archive"
+else
+  fail "playbook-telemetry falls back to telemetry-v without a v archive"
+fi
+if [[ "$(lookup playbook)" = "playbook v 9.1.0" ]] && [[ -z "$(lookup playbook-code)" ]]; then
+  pass "playbook takes the newest v release, and playbook-code without a release prints nothing"
+else
+  fail "playbook takes the newest v release, and playbook-code without a release prints nothing"
 fi
 
 if [[ "${1:-}" = "--keep" ]]; then
   cp "$filled" "$root/Formula/playbook.rb"
   cp "$pbtop" "$root/Formula/pbtop.rb"
-  printf 'Left Formula/playbook.rb with a filled block and Formula/pbtop.rb from the template for the style check.\n'
+  cp "$telemetry" "$root/Formula/playbook-telemetry.rb"
+  printf 'Left Formula/playbook.rb with a filled block, and Formula/pbtop.rb and Formula/playbook-telemetry.rb as a release writes them, for the style check.\n'
 fi
 
 if [[ "$failures" -ne 0 ]]; then

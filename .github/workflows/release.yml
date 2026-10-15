@@ -25,7 +25,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        formula: [playbook, playbook-telemetry, pbtop, playbook-code]
+        formula: [playbook, pbtop, playbook-telemetry, playbook-code]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -57,20 +57,26 @@ jobs:
           read -r source_repo tag_prefix latest <<<"$info"
           # The playbook release workflow opens release/vX.Y.Z here with every
           # formula of a v release (ADR 0039 in pragmatic-engineer/playbook).
-          # This run leaves the release to it while that pull request is open,
-          # and for the first hour after the release on a scheduled run, when
-          # the workflow may not have opened it yet. Once it merges, the
-          # formula is current.
+          # This run leaves the release to it while that pull request from the
+          # app is open, and for the first hour after the release, when the
+          # workflow may not have opened it yet. A run started by hand skips
+          # the hour. Once the pull request merges, the formula is current.
           release_owns() {
             local open published age
-            open="$(gh pr list --repo "$REPO" --head "release/v$1" --state open --json number --jq '.[0].number // empty')"
+            open="$(gh pr list --repo "$REPO" --head "release/v$1" --state open --app igorjs \
+              --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')"
             if [ -n "$open" ]; then
               echo "Pull request #${open} from the playbook release updates ${FORMULA} to $1."
               return 0
             fi
-            [ "$EVENT" = schedule ] || return 1
-            published="$(gh release view "v$1" --repo pragmatic-engineer/playbook --json publishedAt --jq .publishedAt)"
-            age=$(( $(date -u +%s) - $(date -u -d "$published" +%s) ))
+            [ "$EVENT" != workflow_dispatch ] || return 1
+            published="$(gh release view "v$1" --repo pragmatic-engineer/playbook --json publishedAt --jq .publishedAt 2>/dev/null || true)"
+            published="$( [ -z "$published" ] || date -u -d "$published" +%s 2>/dev/null || true)"
+            if [ -z "$published" ]; then
+              echo "Could not read when v$1 was published. The next run checks again."
+              return 0
+            fi
+            age=$(( $(date -u +%s) - published ))
             if [ "$age" -lt 3600 ]; then
               echo "v$1 was published ${age}s ago. The playbook release workflow updates ${FORMULA}, so this run waits."
               return 0
@@ -155,7 +161,7 @@ jobs:
 
           pr="$(gh api -X POST "repos/${REPO}/pulls" \
             -f "title=${title}" -f "head=${branch}" -f base=main \
-            -f "body=Automated bump of the ${FORMULA} pin to ${VERSION}, with URLs and checksums from the release SHA256SUMS, and the caveats breaking changes block from its breaking-changes.json. The playbook release workflow normally makes this change. This run made it because that did not happen within an hour. Squash merged once the checks pass." \
+            -f "body=Automated bump of the ${FORMULA} pin to ${VERSION}, with URLs and checksums from the release SHA256SUMS, and the caveats breaking changes block from its breaking-changes.json. Squash merged once the checks pass." \
             --jq .number)"
           echo "Opened pull request #${pr}."
 

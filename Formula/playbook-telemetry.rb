@@ -29,8 +29,6 @@ class PlaybookTelemetry < Formula
     end
   end
 
-  conflicts_with "pbtop", because: "both install `pbtop`"
-
   def install
     bin.install "playbook-telemetry", "pbtop"
   end
