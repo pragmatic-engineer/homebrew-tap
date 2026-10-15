@@ -83,10 +83,15 @@ jobs:
       - name: Audit, install and test every formula
         run: |
           set -euo pipefail
+          # Each formula is removed after its test, since pbtop and
+          # playbook-telemetry both install pbtop and conflict.
           for f in Formula/*.rb; do
             name="$(basename "$f" .rb)"
             brew audit --strict --online "pragmatic-engineer/tap/${name}"
             brew install --verbose "pragmatic-engineer/tap/${name}"
             brew test "pragmatic-engineer/tap/${name}"
+            if [ "$name" = playbook-telemetry ] || [ "$name" = pbtop ]; then
+              pbtop --version
+            fi
+            brew uninstall "pragmatic-engineer/tap/${name}"
           done
-          pbtop --version

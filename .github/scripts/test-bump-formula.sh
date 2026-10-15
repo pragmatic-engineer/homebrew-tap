@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Tests the breaking changes block of bump-formula.sh against release folders
 # built here and read through DOWNLOAD_BASE, so nothing touches the network.
+# It also checks the pbtop template and the move of playbook-telemetry to v tags.
 # Usage: test-bump-formula.sh [--keep]
-# With --keep, Formula/playbook.rb is left with a filled block, so a style and
-# audit run can check the heredoc that a real release would write.
+# With --keep, Formula/playbook.rb is left with a filled block and
+# Formula/pbtop.rb is written from the template, so a style and audit run can
+# check what a real release would write.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -100,9 +102,48 @@ else
   fail "marker text in an entry does not break the next bump"
 fi
 
+# tool_release NAME VERSION: a release folder with the archives of one tool.
+tool_release() {
+  local dir="$work/tool-$1-$2" t
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  for t in aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-musl x86_64-unknown-linux-musl; do
+    printf 'archive %s\n' "$t" >"$dir/$1-$2-$t.tar.gz"
+  done
+  (cd "$dir" && shasum -a 256 -- *.tar.gz >SHA256SUMS)
+  printf '%s' "$dir"
+}
+
+mkdir -p "$work/p"
+dir="$(tool_release pbtop 9.7.0)"
+pbtop="$work/p/pbtop.rb"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$pbtop" >/dev/null 2>"$work/err" \
+  && grep -qx '    bin.install "pbtop"' "$pbtop" \
+  && grep -qx '  conflicts_with "playbook-telemetry", because: "both install `pbtop`"' "$pbtop" \
+  && [[ "$(grep -c '/download/v9.7.0/pbtop-9.7.0-' "$pbtop")" -eq 4 ]] \
+  && ! grep -q '0\{64\}' "$pbtop" \
+  && ruby -c "$pbtop" >/dev/null; then
+  pass "the pbtop formula is written from its template"
+else
+  fail "the pbtop formula is written from its template"
+fi
+
+dir="$(tool_release playbook-telemetry 9.8.0)"
+telemetry="$work/p/playbook-telemetry.rb"
+cp "$root/Formula/playbook-telemetry.rb" "$telemetry"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.8.0 "$telemetry" >/dev/null 2>"$work/err" \
+  && grep -qxF '    regex(/^v(\d+(?:\.\d+)+)$/i)' "$telemetry" \
+  && [[ "$(grep -c '/download/v9.8.0/playbook-telemetry-9.8.0-' "$telemetry")" -eq 4 ]] \
+  && ruby -c "$telemetry" >/dev/null; then
+  pass "playbook-telemetry moves to v tags, livecheck included"
+else
+  fail "playbook-telemetry moves to v tags, livecheck included"
+fi
+
 if [[ "${1:-}" = "--keep" ]]; then
   cp "$filled" "$root/Formula/playbook.rb"
-  printf 'Left Formula/playbook.rb with a filled block for the style check.\n'
+  cp "$pbtop" "$root/Formula/pbtop.rb"
+  printf 'Left Formula/playbook.rb with a filled block and Formula/pbtop.rb from the template for the style check.\n'
 fi
 
 if [[ "$failures" -ne 0 ]]; then
