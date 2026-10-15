@@ -35,7 +35,10 @@ class Playbook < Formula
   end
 
   def caveats
-    <<~EOS
+    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.
+    breaking = ""
+    # END breaking changes
+    breaking + <<~EOS
       Run `playbook init` once. In a terminal it asks before it adds the safety
       hooks to ~/.claude/settings.json, and it puts playbook on PATH for every
       shell, including the ones Claude Code starts for hooks.
