@@ -33,9 +33,8 @@ jobs:
           brew test-bot --only-setup
           brew test-bot --only-tap-syntax
 
-  # Runs the breaking changes block of bump-formula.sh against local release
-  # folders, then checks the style of a formula with a filled block, the shape
-  # a real release with breaking changes writes.
+  # Runs bump-formula.sh and latest-release.sh against local release folders
+  # and a stub gh, then checks the style of the formulas a release writes.
   bump-script:
     runs-on: ubuntu-latest
     steps:
@@ -47,13 +46,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Test the breaking changes block
-        run: .github/scripts/test-bump-formula.sh --keep
-
-      - name: Style check the filled formula
+      # The cleanup removes files git does not track, so the test runs after
+      # it and leaves the formulas a release writes, Formula/pbtop.rb included.
+      - name: Test bump-formula.sh and style check what it writes
         run: |
           brew test-bot --only-cleanup-before
           brew test-bot --only-setup
+          .github/scripts/test-bump-formula.sh --keep
           brew test-bot --only-tap-syntax
 
   install:
