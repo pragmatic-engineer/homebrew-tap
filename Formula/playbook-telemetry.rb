@@ -9,6 +9,10 @@ class PlaybookTelemetry < Formula
     regex(/^telemetry-v(\d+(?:\.\d+)+)$/i)
   end
 
+  disable! date:                "2026-11-16",
+           because:             "is replaced by pbtop. Run `brew uninstall playbook-telemetry && brew install pbtop`",
+           replacement_formula: "pbtop"
+
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/pragmatic-engineer/playbook/releases/download/telemetry-v0.2.0/playbook-telemetry-0.2.0-aarch64-apple-darwin.tar.gz"
