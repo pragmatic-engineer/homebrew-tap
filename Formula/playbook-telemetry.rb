@@ -9,6 +9,10 @@ class PlaybookTelemetry < Formula
     regex(/^telemetry-v(\d+(?:\.\d+)+)$/i)
   end
 
+  disable! date:                "2026-11-16",
+           because:             "is replaced by pbtop. Run `brew uninstall playbook-telemetry && brew install pbtop`",
+           replacement_formula: "pbtop"
+
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/pragmatic-engineer/playbook/releases/download/telemetry-v0.2.0/playbook-telemetry-0.2.0-aarch64-apple-darwin.tar.gz"
@@ -31,16 +35,6 @@ class PlaybookTelemetry < Formula
 
   def install
     bin.install "playbook-telemetry", "pbtop"
-  end
-
-  def caveats
-    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.
-    breaking = ""
-    # END breaking changes
-    breaking + <<~EOS
-      Run `pbtop` to start. It is the short alias of `playbook-telemetry`,
-      which is the long name for scripts. Both are installed.
-    EOS
   end
 
   test do
