@@ -3,7 +3,6 @@
 # The formula name picks the release asset suffix and the default source:
 #   playbook            pragmatic-engineer/playbook, tags vX.Y.Z       raw binary
 #   pbtop               pragmatic-engineer/playbook, tags vX.Y.Z       .tar.gz holding pbtop alone
-#   playbook-code       pragmatic-engineer/playbook, tags code-vX.Y.Z  .tar.gz holding playbook-code and pbcode
 # Since playbook 0.34.0 one v release ships every tool. playbook-telemetry is
 # retired and replaced by pbtop, so it is no longer bumped.
 # SOURCE_REPO and TAG_PREFIX override the source (latest-release.sh prints them),
@@ -29,11 +28,6 @@ case "$name" in
     repo="playbook"; prefix="v"; suffix=".tar.gz"
     class_name="Pbtop"; alias_bin=""
     desc="Terminal dashboard of Claude Code token use and cost"
-    ;;
-  playbook-code)
-    repo="playbook"; prefix="code-v"; suffix=".tar.gz"
-    class_name="PlaybookCode"; alias_bin="pbcode"
-    desc="Local code index and search for coding agents"
     ;;
   *)
     echo "::error::no release mapping for formula '${name}'" >&2

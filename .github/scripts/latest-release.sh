@@ -3,7 +3,6 @@
 # Releases come from pragmatic-engineer/playbook:
 #   playbook            v            the raw binary
 #   pbtop               v            from the first v release that carries its archive
-#   playbook-code       code-v
 # playbook-telemetry is retired and replaced by pbtop, so it has no lookup.
 # Since playbook 0.34.0 one v release ships every tool (ADR 0038 in
 # pragmatic-engineer/playbook), so a v release counts for a tool only when it
@@ -22,7 +21,6 @@ case "$formula" in
     exit 1
     ;;
   pbtop) candidates=("playbook v asset") ;;
-  playbook-code) candidates=("playbook code-v -" "playbook-code v -") ;;
   *)
     echo "::error::no release mapping for formula '${formula}'" >&2
     exit 1

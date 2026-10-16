@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests bump-formula.sh against release folders built here and read through
 # DOWNLOAD_BASE, so nothing touches the network. It checks the release notes
-# line in the caveats, the pbtop and playbook-code templates, the refusal of
+# line in the caveats, the pbtop template, the refusal of
 # the retired playbook-telemetry formula and latest-release.sh against a stub gh.
 # Usage: test-bump-formula.sh [--keep]
 # With --keep, Formula/pbtop.rb is left as a release writes it, so a style and
@@ -88,21 +88,6 @@ else
   fail "the pbtop template has no conflicts_with and ends its caveats with the release notes line"
 fi
 
-# The playbook-code template, which has an alias, from a missing formula.
-mkdir -p "$work/c"
-code="$work/c/playbook-code.rb"
-code_notes='      Release notes: https://github.com/pragmatic-engineer/playbook/releases/tag/code-v#{version}'
-dir="$(tool_release playbook-code 9.8.0)"
-if DOWNLOAD_BASE="file://$dir" bash "$script" 9.8.0 "$code" >/dev/null 2>"$work/err" \
-  && [[ "$(grep -c '/download/code-v9.8.0/playbook-code-9.8.0-' "$code")" -eq 4 ]] \
-  && grep -qx '    bin.install "playbook-code", "pbcode"' "$code" \
-  && [[ "$(grep -A1 -xF "$code_notes" "$code" | tail -n1)" = '    EOS' ]] \
-  && ruby -c "$code" >/dev/null; then
-  pass "the playbook-code template has code-v urls and its release notes line"
-else
-  fail "the playbook-code template has code-v urls and its release notes line"
-fi
-
 mkdir -p "$work/t"
 cp "$root/Formula/playbook-telemetry.rb" "$work/t/playbook-telemetry.rb"
 dir="$(tool_release playbook-telemetry 9.7.0)"
@@ -160,10 +145,10 @@ if ! lookup playbook-telemetry >/dev/null \
 else
   fail "latest-release.sh refuses playbook-telemetry"
 fi
-if [[ "$(lookup playbook)" = "playbook v 9.1.0" ]] && [[ -z "$(lookup playbook-code)" ]]; then
-  pass "playbook takes the newest v release, and playbook-code without a release prints nothing"
+if [[ "$(lookup playbook)" = "playbook v 9.1.0" ]]; then
+  pass "playbook takes the newest v release"
 else
-  fail "playbook takes the newest v release, and playbook-code without a release prints nothing"
+  fail "playbook takes the newest v release"
 fi
 
 if [[ "${1:-}" = "--keep" ]]; then
