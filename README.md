@@ -45,7 +45,7 @@ Covers macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl 
 brew uninstall playbook-telemetry && brew install pbtop
 ```
 
-You do not need the standalone tools if you have `playbook`: `playbook usage` runs the same code as `pbtop`.
+You do not need `pbtop` if you have `playbook`: `playbook usage` runs the same code as `pbtop`.
 
 ## Keeping the formula current
 
