@@ -3,7 +3,7 @@
 Homebrew tap for the [pragmatic-engineer/playbook](https://github.com/pragmatic-engineer/playbook) toolkit. It carries these tools:
 
 - `playbook`, the Claude Code plugin toolkit and its binary.
-- `pbtop`, the standalone token and cost dashboard. Its formula arrives with playbook 0.35.0, the first release that ships it.
+- `pbtop`, the standalone token and cost dashboard. It ships with `playbook` from 0.35.0.
 - `playbook-telemetry`, retired and replaced by `pbtop`.
 
 ## Install
@@ -36,7 +36,7 @@ Covers macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl 
 | Formula | Install | Commands |
 |---|---|---|
 | `playbook` | `brew install pragmatic-engineer/tap/playbook` | `playbook` |
-| `pbtop` | `brew install pragmatic-engineer/tap/pbtop` (from playbook 0.35.0) | `pbtop` |
+| `pbtop` | `brew install pragmatic-engineer/tap/pbtop` | `pbtop` |
 | `playbook-telemetry` | Retired. Install `pbtop` instead. | `pbtop` and `playbook-telemetry` |
 
 `playbook-telemetry` is retired. Homebrew shows it as deprecated until 2026-11-16 and disabled after that date. If you have it installed, switch once:
@@ -49,7 +49,7 @@ You do not need `pbtop` if you have `playbook`: `playbook usage` runs the same c
 
 ## Keeping the formula current
 
-One `v` release of `pragmatic-engineer/playbook` ships `playbook` and, from 0.35.0, `pbtop` with the same version. Its release workflow opens a `release/vX.Y.Z` pull request here that updates those formulas with `.github/scripts/bump-formula.sh`, and turns on auto-merge. When that pull request merges, the `release-tag` workflow tags the merge commit `vX.Y.Z` and publishes a release that lists the formula versions. It acts only on a merged pull request from the `igorjs[bot]` app on a `release/v*` branch, and it uses only `GITHUB_TOKEN`.
+One `v` release of `pragmatic-engineer/playbook` ships `playbook` and `pbtop` with the same version. Its release workflow opens a `release/vX.Y.Z` pull request here that updates those formulas with `.github/scripts/bump-formula.sh`, and turns on auto-merge. When that pull request merges, the `release-tag` workflow tags the merge commit `vX.Y.Z` and publishes a release that lists the formula versions. It acts only on a merged pull request from the `igorjs[bot]` app on a `release/v*` branch, and it uses only `GITHUB_TOKEN`.
 
 The `release` workflow is the fallback. It checks every 30 minutes, and merges the bump once the `tests` workflow passes. It can also be started by hand with `workflow_dispatch` (the `bump` workflow is the same job and shares its concurrency group), or by a `tool-released` `repository_dispatch` event, which needs a sender with its own token. The schedule alone needs no secret. A bump pull request that is still open is left alone by later runs. A run also leaves a `v` release alone while its `release/vX.Y.Z` pull request is open, and a run that was not started by hand does so for the first hour after the release, so it does not open a second pull request for the same change. Every trigger runs the same job for each formula. It reads the latest release of that tool and compares it with the formula. If the release is newer, it rewrites the URLs and checksums from that release's own `SHA256SUMS` (`.github/scripts/bump-formula.sh`, which refuses to write a formula when a checksum is missing) and commits the change to a `bump/<formula>-v<version>` branch through the GitHub API and opens a pull request. It uses only the built-in `GITHUB_TOKEN`, so no secret is stored. GitHub signs the commit, so it shows as verified. A pull request opened with `GITHUB_TOKEN` gets its `pull_request` run held for approval, so the bump approves that run, waits for the `tests` workflow (audit, install and test on four platforms) to pass, and then squash merges the pull request through the API, which `protect-main` allows because the required checks passed on the branch head. The caveats of each formula end with one line that links the release notes of the installed version, built from `#{version}`, so `brew upgrade` and `brew info` point to them and the bump writes no caveats text. The `bump-script` job in `tests` runs `.github/scripts/test-bump-formula.sh` and a style check of the `pbtop` formula a release writes. Don't edit the formula's URLs or checksums by hand.
 
