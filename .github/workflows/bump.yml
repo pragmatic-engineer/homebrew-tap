@@ -17,7 +17,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        formula: [playbook, pbtop, playbook-telemetry, playbook-code]
+        formula: [playbook, pbtop, playbook-code]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -156,7 +156,7 @@ jobs:
 
           pr="$(gh api -X POST "repos/${REPO}/pulls" \
             -f "title=${title}" -f "head=${branch}" -f base=main \
-            -f "body=Automated bump of the ${FORMULA} pin to ${VERSION}, with URLs and checksums from the release SHA256SUMS, and the caveats breaking changes block from its breaking-changes.json. Squash merged once the checks pass." \
+            -f "body=Automated bump of the ${FORMULA} pin to ${VERSION}, with URLs and checksums from the release SHA256SUMS. Squash merged once the checks pass." \
             --jq .number)"
           echo "Opened pull request #${pr}."
 

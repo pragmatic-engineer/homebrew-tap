@@ -35,18 +35,17 @@ class Playbook < Formula
   end
 
   def caveats
-    # BEGIN breaking changes. bump-formula.sh writes this from breaking-changes.json.
-    breaking = ""
-    # END breaking changes
-    breaking + <<~EOS
-      Run `playbook init` once. In a terminal it asks before it adds the safety
-      hooks to ~/.claude/settings.json, and it puts playbook on PATH for every
-      shell, including the ones Claude Code starts for hooks.
+    <<~EOS
+      Run `playbook init` once (`playbook setup` from 0.35.0). In a terminal
+      it asks before it adds the safety hooks to ~/.claude/settings.json, and
+      it puts playbook on PATH for every shell, including the ones Claude Code
+      starts for hooks.
       If you used the old playbook-hooks plugin, run
       `claude plugin uninstall playbook-hooks@pragmatic-engineer` first.
       Start sessions with `playbook cc` or `playbook ccd`. `pb` is a short alias,
       so `pb cc` and `pb ccd` work too.
       Installing never edits your Claude Code settings. Upgrade with `brew upgrade playbook`.
+      Release notes: https://github.com/pragmatic-engineer/playbook/releases/tag/v#{version}
     EOS
   end
 

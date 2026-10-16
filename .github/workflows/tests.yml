@@ -82,14 +82,18 @@ jobs:
       - name: Audit, install and test every formula
         run: |
           set -euo pipefail
-          # Each formula is removed after its test, since pbtop and
-          # playbook-telemetry both install pbtop and conflict.
+          # A disabled or deprecated formula is only audited, since it is on
+          # its way out and points to its replacement.
           for f in Formula/*.rb; do
             name="$(basename "$f" .rb)"
             brew audit --strict --online "pragmatic-engineer/tap/${name}"
+            if [ "$(brew info --json=v2 "pragmatic-engineer/tap/${name}" | jq -r '.formulae[0] | .disabled or .deprecated')" = true ]; then
+              echo "${name} is disabled or deprecated, so it is audited only."
+              continue
+            fi
             brew install --verbose "pragmatic-engineer/tap/${name}"
             brew test "pragmatic-engineer/tap/${name}"
-            if [ "$name" = playbook-telemetry ] || [ "$name" = pbtop ]; then
+            if [ "$name" = pbtop ]; then
               pbtop --version
             fi
             brew uninstall "pragmatic-engineer/tap/${name}"

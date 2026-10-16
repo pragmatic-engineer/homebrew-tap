@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Tests the breaking changes block of bump-formula.sh against release folders
-# built here and read through DOWNLOAD_BASE, so nothing touches the network.
-# It also checks the pbtop template, the move of playbook-telemetry to v tags
-# and latest-release.sh against a stub gh.
+# Tests bump-formula.sh against release folders built here and read through
+# DOWNLOAD_BASE, so nothing touches the network. It checks the release notes
+# line in the caveats, the pbtop and playbook-code templates, the refusal of
+# the retired playbook-telemetry formula and latest-release.sh against a stub gh.
 # Usage: test-bump-formula.sh [--keep]
-# With --keep, Formula/playbook.rb is left with a filled block and
-# Formula/pbtop.rb and Formula/playbook-telemetry.rb are left as a release
-# writes them, so a style and audit run can check them.
+# With --keep, Formula/pbtop.rb is left as a release writes it, so a style and
+# audit run can check it.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -18,7 +17,9 @@ failures=0
 pass() { printf 'PASS %s\n' "$1"; }
 fail() { printf 'FAIL %s\n' "$1"; failures=$((failures + 1)); }
 
-# release VERSION ENTRIES_JSON [unlisted|tampered]: builds a release folder.
+notes='      Release notes: https://github.com/pragmatic-engineer/playbook/releases/tag/v#{version}'
+
+# release VERSION: builds a release folder with the playbook binaries.
 release() {
   local dir="$work/rel-$1" t
   rm -rf "$dir"
@@ -26,81 +27,33 @@ release() {
   for t in aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-musl x86_64-unknown-linux-musl; do
     printf 'bin %s\n' "$t" >"$dir/playbook-$1-$t"
   done
-  printf '{"entries":%s}\n' "$2" >"$dir/breaking-changes.json"
-  (cd "$dir" && shasum -a 256 playbook-* breaking-changes.json >SHA256SUMS)
-  case "${3:-}" in
-    unlisted) grep -v breaking-changes.json "$dir/SHA256SUMS" >"$dir/S" && mv "$dir/S" "$dir/SHA256SUMS" ;;
-    tampered) printf '{"entries":[]}\n' >"$dir/breaking-changes.json" ;;
-  esac
+  (cd "$dir" && shasum -a 256 playbook-* >SHA256SUMS)
   printf '%s' "$dir"
 }
 
-entry() {
-  jq -cn --arg v "$1" --arg s "$2" --arg a "$3" \
-    '[{version: $v, component: "playbook", summary: $s, action: $a, migration: null}]'
-}
-
-# bump VERSION DIR: runs the script on a copy of the formula, prints its path.
-bump() {
-  mkdir -p "$work/f"
-  cp "$root/Formula/playbook.rb" "$work/f/playbook.rb"
-  DOWNLOAD_BASE="file://$2" bash "$script" "$1" "$work/f/playbook.rb" >/dev/null 2>"$work/err"
-}
-
-dir="$(release 9.0.0 "$(entry 9.0.0 "The old flag is gone, so 'pb x' fails.   " "playbook init")")"
-if bump 9.0.0 "$dir" \
-  && grep -qx "      - The old flag is gone, so 'pb x' fails." "$work/f/playbook.rb" \
-  && grep -qx '    breaking = <<~BREAKING' "$work/f/playbook.rb" \
+mkdir -p "$work/f"
+cp "$root/Formula/playbook.rb" "$work/f/playbook.rb"
+dir="$(release 9.0.0)"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.0.0 "$work/f/playbook.rb" >/dev/null 2>"$work/err" \
+  && [[ "$(grep -c '/download/v9.0.0/playbook-9.0.0-' "$work/f/playbook.rb")" -eq 4 ]] \
+  && [[ "$(grep -cxF "$notes" "$work/f/playbook.rb")" -eq 1 ]] \
+  && ! grep -qi 'breaking' "$work/f/playbook.rb" \
   && ruby -c "$work/f/playbook.rb" >/dev/null; then
-  pass "an entry is written, trimmed, into a heredoc"
+  pass "a bump keeps the release notes line and writes no breaking block"
 else
-  fail "an entry is written, trimmed, into a heredoc"
-fi
-filled="$work/f/playbook.rb.filled"
-cp "$work/f/playbook.rb" "$filled"
-
-dir="$(release 9.1.0 "[]")"
-if bump 9.1.0 "$dir" && grep -qx '    breaking = ""' "$work/f/playbook.rb"; then
-  pass "a release with no entries clears the block"
-else
-  fail "a release with no entries clears the block"
+  fail "a bump keeps the release notes line and writes no breaking block"
 fi
 
-dir="$(release 9.2.0 "$(entry 9.2.0 s x)" unlisted)"
-if bump 9.2.0 "$dir" && grep -qx '    breaking = ""' "$work/f/playbook.rb"; then
-  pass "a release that does not list the file clears the block"
+# A notes line that points elsewhere is rewritten to the current repo and prefix.
+sed 's#releases/tag/v\#{version}#releases/tag/old-v\#{version}#' "$root/Formula/playbook.rb" >"$work/f/playbook.rb"
+dir="$(release 9.1.0)"
+if grep -q 'tag/old-v#{version}' "$work/f/playbook.rb" \
+  && DOWNLOAD_BASE="file://$dir" bash "$script" 9.1.0 "$work/f/playbook.rb" >/dev/null 2>"$work/err" \
+  && [[ "$(grep -cxF "$notes" "$work/f/playbook.rb")" -eq 1 ]] \
+  && ! grep -q 'old-v' "$work/f/playbook.rb"; then
+  pass "a bump rewrites the release notes line to the current repo and prefix"
 else
-  fail "a release that does not list the file clears the block"
-fi
-
-dir="$(release 9.3.0 "$(entry 9.3.0 s x)" tampered)"
-if ! bump 9.3.0 "$dir" && grep -q "does not match" "$work/err"; then
-  pass "a file that does not match SHA256SUMS stops the bump"
-else
-  fail "a file that does not match SHA256SUMS stops the bump"
-fi
-
-for bad in $'a\nBREAKING\nsystem("id")' 'a #{x}' 'a #@x' 'a #$x' 'a \ b' 'uses setuid'; do
-  dir="$(release 9.4.0 "$(entry 9.4.0 "$bad" x)")"
-  if ! bump 9.4.0 "$dir" && grep -q "cannot hold" "$work/err"; then
-    pass "unsafe text stops the bump: ${bad//$'\n'/\\n}"
-  else
-    fail "unsafe text stops the bump: ${bad//$'\n'/\\n}"
-  fi
-done
-
-dir="$(release 9.5.0 "$(entry 9.5.0 'x # END breaking changes' y)")"
-if bump 9.5.0 "$dir"; then
-  dir="$(release 9.6.0 "[]")"
-  mkdir -p "$work/g" && cp "$work/f/playbook.rb" "$work/g/playbook.rb"
-  if DOWNLOAD_BASE="file://$dir" bash "$script" 9.6.0 "$work/g/playbook.rb" >/dev/null 2>&1 \
-    && grep -qx '    breaking = ""' "$work/g/playbook.rb"; then
-    pass "marker text in an entry does not break the next bump"
-  else
-    fail "marker text in an entry does not break the next bump"
-  fi
-else
-  fail "marker text in an entry does not break the next bump"
+  fail "a bump rewrites the release notes line to the current repo and prefix"
 fi
 
 # tool_release NAME VERSION: a release folder with the archives of one tool.
@@ -115,29 +68,11 @@ tool_release() {
   printf '%s' "$dir"
 }
 
-conflict_telemetry='  conflicts_with "playbook-telemetry", because: "both install `pbtop`"'
-conflict_pbtop='  conflicts_with "pbtop", because: "both install `pbtop`"'
-
-# pbtop alone: no conflicts_with, since the audit fails on a conflict with a
-# formula it cannot find.
-mkdir -p "$work/alone"
-dir="$(tool_release pbtop 9.7.0)"
-if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$work/alone/pbtop.rb" >/dev/null 2>"$work/err" \
-  && ! grep -q '^  conflicts_with ' "$work/alone/pbtop.rb"; then
-  pass "pbtop alone gets no conflicts_with"
-else
-  fail "pbtop alone gets no conflicts_with"
-fi
-
-# The order of a release: pbtop is written next to playbook-telemetry, which
-# then moves to v tags. Each names the other.
 mkdir -p "$work/p"
-telemetry="$work/p/playbook-telemetry.rb"
-cp "$root/Formula/playbook-telemetry.rb" "$telemetry"
 pbtop="$work/p/pbtop.rb"
+dir="$(tool_release pbtop 9.7.0)"
 if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$pbtop" >/dev/null 2>"$work/err" \
   && grep -qx '    bin.install "pbtop"' "$pbtop" \
-  && grep -qxF "$conflict_telemetry" "$pbtop" \
   && [[ "$(grep -c '/download/v9.7.0/pbtop-9.7.0-' "$pbtop")" -eq 4 ]] \
   && ! grep -q '0\{64\}' "$pbtop" \
   && ruby -c "$pbtop" >/dev/null; then
@@ -145,18 +80,38 @@ if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$pbtop" >/dev/null 2>"$work
 else
   fail "the pbtop formula is written from its template"
 fi
-
-dir="$(tool_release playbook-telemetry 9.7.0)"
-if DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$telemetry" >/dev/null 2>"$work/err" \
-  && grep -qxF '    regex(/^v(\d+(?:\.\d+)+)$/i)' "$telemetry" \
-  && [[ "$(grep -c '/download/v9.7.0/playbook-telemetry-9.7.0-' "$telemetry")" -eq 4 ]] \
-  && [[ "$(grep -cxF "$conflict_pbtop" "$telemetry")" -eq 1 ]] \
-  && DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$telemetry" >/dev/null 2>"$work/err" \
-  && [[ "$(grep -c '^  conflicts_with ' "$telemetry")" -eq 1 ]] \
-  && ruby -c "$telemetry" >/dev/null; then
-  pass "playbook-telemetry moves to v tags and names pbtop once"
+if ! grep -q 'conflicts_with' "$pbtop" \
+  && [[ "$(grep -cxF "$notes" "$pbtop")" -eq 1 ]] \
+  && [[ "$(grep -A1 -xF "$notes" "$pbtop" | tail -n1)" = '    EOS' ]]; then
+  pass "the pbtop template has no conflicts_with and ends its caveats with the release notes line"
 else
-  fail "playbook-telemetry moves to v tags and names pbtop once"
+  fail "the pbtop template has no conflicts_with and ends its caveats with the release notes line"
+fi
+
+# The playbook-code template, which has an alias, from a missing formula.
+mkdir -p "$work/c"
+code="$work/c/playbook-code.rb"
+code_notes='      Release notes: https://github.com/pragmatic-engineer/playbook/releases/tag/code-v#{version}'
+dir="$(tool_release playbook-code 9.8.0)"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.8.0 "$code" >/dev/null 2>"$work/err" \
+  && [[ "$(grep -c '/download/code-v9.8.0/playbook-code-9.8.0-' "$code")" -eq 4 ]] \
+  && grep -qx '    bin.install "playbook-code", "pbcode"' "$code" \
+  && [[ "$(grep -A1 -xF "$code_notes" "$code" | tail -n1)" = '    EOS' ]] \
+  && ruby -c "$code" >/dev/null; then
+  pass "the playbook-code template has code-v urls and its release notes line"
+else
+  fail "the playbook-code template has code-v urls and its release notes line"
+fi
+
+mkdir -p "$work/t"
+cp "$root/Formula/playbook-telemetry.rb" "$work/t/playbook-telemetry.rb"
+dir="$(tool_release playbook-telemetry 9.7.0)"
+if ! DOWNLOAD_BASE="file://$dir" bash "$script" 9.7.0 "$work/t/playbook-telemetry.rb" >/dev/null 2>"$work/err" \
+  && grep -qxF '::error::playbook-telemetry is retired; use pbtop' "$work/err" \
+  && cmp -s "$root/Formula/playbook-telemetry.rb" "$work/t/playbook-telemetry.rb"; then
+  pass "bump-formula.sh refuses playbook-telemetry and leaves it unchanged"
+else
+  fail "bump-formula.sh refuses playbook-telemetry and leaves it unchanged"
 fi
 
 # latest-release.sh against a stub gh. GH_RELEASES is the release list as
@@ -199,10 +154,11 @@ if [[ "$(GH_ASSETS_v9_1_0="playbook-9.1.0-x86_64-unknown-linux-musl" \
 else
   fail "pbtop skips a v release without its archive"
 fi
-if [[ "$(lookup playbook-telemetry)" = "playbook telemetry-v 0.2.0" ]]; then
-  pass "playbook-telemetry falls back to telemetry-v without a v archive"
+if ! lookup playbook-telemetry >/dev/null \
+  && grep -qxF '::error::playbook-telemetry is retired; use pbtop' "$work/err"; then
+  pass "latest-release.sh refuses playbook-telemetry"
 else
-  fail "playbook-telemetry falls back to telemetry-v without a v archive"
+  fail "latest-release.sh refuses playbook-telemetry"
 fi
 if [[ "$(lookup playbook)" = "playbook v 9.1.0" ]] && [[ -z "$(lookup playbook-code)" ]]; then
   pass "playbook takes the newest v release, and playbook-code without a release prints nothing"
@@ -211,10 +167,8 @@ else
 fi
 
 if [[ "${1:-}" = "--keep" ]]; then
-  cp "$filled" "$root/Formula/playbook.rb"
   cp "$pbtop" "$root/Formula/pbtop.rb"
-  cp "$telemetry" "$root/Formula/playbook-telemetry.rb"
-  printf 'Left Formula/playbook.rb with a filled block, and Formula/pbtop.rb and Formula/playbook-telemetry.rb as a release writes them, for the style check.\n'
+  printf 'Left Formula/pbtop.rb as a release writes it, for the style check.\n'
 fi
 
 if [[ "$failures" -ne 0 ]]; then
