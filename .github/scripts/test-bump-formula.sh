@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Tests bump-formula.sh against release folders built here and read through
 # DOWNLOAD_BASE, so nothing touches the network. It checks the release notes
-# line in the caveats, the pbtop template, the refusal of the retired
-# playbook-telemetry formula and latest-release.sh against a stub gh.
+# line in the caveats, the pbtop and playbook-code templates, the refusal of
+# the retired playbook-telemetry formula and latest-release.sh against a stub gh.
 # Usage: test-bump-formula.sh [--keep]
 # With --keep, Formula/pbtop.rb is left as a release writes it, so a style and
 # audit run can check it.
@@ -44,6 +44,18 @@ else
   fail "a bump keeps the release notes line and writes no breaking block"
 fi
 
+# A notes line that points elsewhere is rewritten to the current repo and prefix.
+sed 's#releases/tag/v\#{version}#releases/tag/old-v\#{version}#' "$root/Formula/playbook.rb" >"$work/f/playbook.rb"
+dir="$(release 9.1.0)"
+if grep -q 'tag/old-v#{version}' "$work/f/playbook.rb" \
+  && DOWNLOAD_BASE="file://$dir" bash "$script" 9.1.0 "$work/f/playbook.rb" >/dev/null 2>"$work/err" \
+  && [[ "$(grep -cxF "$notes" "$work/f/playbook.rb")" -eq 1 ]] \
+  && ! grep -q 'old-v' "$work/f/playbook.rb"; then
+  pass "a bump rewrites the release notes line to the current repo and prefix"
+else
+  fail "a bump rewrites the release notes line to the current repo and prefix"
+fi
+
 # tool_release NAME VERSION: a release folder with the archives of one tool.
 tool_release() {
   local dir="$work/tool-$1-$2" t
@@ -74,6 +86,21 @@ if ! grep -q 'conflicts_with' "$pbtop" \
   pass "the pbtop template has no conflicts_with and ends its caveats with the release notes line"
 else
   fail "the pbtop template has no conflicts_with and ends its caveats with the release notes line"
+fi
+
+# The playbook-code template, which has an alias, from a missing formula.
+mkdir -p "$work/c"
+code="$work/c/playbook-code.rb"
+code_notes='      Release notes: https://github.com/pragmatic-engineer/playbook/releases/tag/code-v#{version}'
+dir="$(tool_release playbook-code 9.8.0)"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.8.0 "$code" >/dev/null 2>"$work/err" \
+  && [[ "$(grep -c '/download/code-v9.8.0/playbook-code-9.8.0-' "$code")" -eq 4 ]] \
+  && grep -qx '    bin.install "playbook-code", "pbcode"' "$code" \
+  && [[ "$(grep -A1 -xF "$code_notes" "$code" | tail -n1)" = '    EOS' ]] \
+  && ruby -c "$code" >/dev/null; then
+  pass "the playbook-code template has code-v urls and its release notes line"
+else
+  fail "the playbook-code template has code-v urls and its release notes line"
 fi
 
 mkdir -p "$work/t"

@@ -36,10 +36,10 @@ class Playbook < Formula
 
   def caveats
     <<~EOS
-      Run `playbook setup` once (`playbook init` on 0.34 and earlier). In a
-      terminal it asks before it adds the safety hooks to ~/.claude/settings.json,
-      and it puts playbook on PATH for every shell, including the ones Claude
-      Code starts for hooks.
+      Run `playbook init` once (`playbook setup` from 0.35.0). In a terminal
+      it asks before it adds the safety hooks to ~/.claude/settings.json, and
+      it puts playbook on PATH for every shell, including the ones Claude Code
+      starts for hooks.
       If you used the old playbook-hooks plugin, run
       `claude plugin uninstall playbook-hooks@pragmatic-engineer` first.
       Start sessions with `playbook cc` or `playbook ccd`. `pb` is a short alias,

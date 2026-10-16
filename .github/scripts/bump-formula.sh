@@ -127,6 +127,13 @@ LIVECHECK_RE="    regex(/^${prefix}(\\d+(?:\\.\\d+)+)\$/i)" awk '
 ' "$tmp" >"${tmp}.new"
 mv "${tmp}.new" "$tmp"
 
+# The release notes line in the caveats follows the repo and tag prefix too,
+# so a formula that moves its source links the right release page.
+NOTES_LINE="      Release notes: https://github.com/pragmatic-engineer/${repo}/releases/tag/${prefix}#{version}" awk '
+  index($0, "      Release notes: https://github.com/") == 1 { print ENVIRON["NOTES_LINE"]; next } { print }
+' "$tmp" >"${tmp}.new"
+mv "${tmp}.new" "$tmp"
+
 rewritten="$(grep -c "/download/${tag}/${name}-${version}-" "$tmp" || true)"
 if [[ "$rewritten" -ne ${#targets[@]} ]]; then
   echo "::error::expected ${#targets[@]} url lines for ${tag} after the rewrite, found ${rewritten}. The formula layout changed. Refusing to write." >&2
