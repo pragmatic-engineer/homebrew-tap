@@ -5,7 +5,6 @@ Homebrew tap for the [pragmatic-engineer/playbook](https://github.com/pragmatic-
 - `playbook`, the Claude Code plugin toolkit and its binary.
 - `pbtop`, the standalone token and cost dashboard. Its formula arrives with playbook 0.35.0, the first release that ships it.
 - `playbook-telemetry`, retired and replaced by `pbtop`.
-- `playbook-code`, the standalone code index and search, with the short alias `pbcode`. It has no formula until its first release.
 
 ## Install
 
@@ -39,7 +38,6 @@ Covers macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl 
 | `playbook` | `brew install pragmatic-engineer/tap/playbook` | `playbook` |
 | `pbtop` | `brew install pragmatic-engineer/tap/pbtop` (from playbook 0.35.0) | `pbtop` |
 | `playbook-telemetry` | Retired. Install `pbtop` instead. | `pbtop` and `playbook-telemetry` |
-| `playbook-code` | Not available until its first release. Use `playbook code` today. | `pbcode` (short alias) and `playbook-code` |
 
 `playbook-telemetry` is retired. Homebrew shows it as deprecated until 2026-11-16 and disabled after that date. If you have it installed, switch once:
 
@@ -47,7 +45,7 @@ Covers macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl 
 brew uninstall playbook-telemetry && brew install pbtop
 ```
 
-You do not need the standalone tools if you have `playbook`: `playbook usage` runs the same code as `pbtop`, and `playbook code` is what `pbcode` will be.
+You do not need the standalone tools if you have `playbook`: `playbook usage` runs the same code as `pbtop`.
 
 ## Keeping the formula current
 
@@ -57,4 +55,4 @@ The `release` workflow is the fallback. It checks every 30 minutes, and merges t
 
 The `tests` workflow in this repo runs `brew audit --strict`, `brew install` and `brew test` on Linux and macOS (arm64 and x86_64) for every push, pull request and weekly. A disabled or deprecated formula, such as `playbook-telemetry`, is only audited. Bottles are not built, because the formula installs prebuilt binaries.
 
-A formula that does not exist yet, such as `playbook-code`, is created from a template at the tool's first release. If a formula is behind the latest release, check the latest `release` run in this repo.
+If a formula is behind the latest release, check the latest `release` run in this repo.
