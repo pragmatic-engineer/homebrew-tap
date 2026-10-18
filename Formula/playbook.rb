@@ -11,21 +11,21 @@ class Playbook < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.36.0/playbook-0.36.0-aarch64-apple-darwin"
-      sha256 "2a60ba0aa0880d907948cf818dae0557de7162e0ff4bcae6007cf738dd4c4211"
+      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.37.0/playbook-0.37.0-aarch64-apple-darwin"
+      sha256 "f4d47a2ac72f57240fae57c1987e563582d5d5af2623003175bd9f4d8cca3654"
     else
-      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.36.0/playbook-0.36.0-x86_64-apple-darwin"
-      sha256 "9d5cf25f987c024161863fc3856865088adf8ce447d873c71719a1b161a47d62"
+      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.37.0/playbook-0.37.0-x86_64-apple-darwin"
+      sha256 "ea48c47ce0a326cecc9663a8ff684f6d3d460e7f862dadd78c8e34c3ea8ac5cd"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.36.0/playbook-0.36.0-aarch64-unknown-linux-musl"
-      sha256 "d07c456b03786e3aca51739d69bddcbe1a1b7fe0eae4cd7f44a3d0499cb5d9cf"
+      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.37.0/playbook-0.37.0-aarch64-unknown-linux-musl"
+      sha256 "f0869c67ad7213ab50acae24252f815f4f8ee31a041539f3ac334aabd3671385"
     else
-      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.36.0/playbook-0.36.0-x86_64-unknown-linux-musl"
-      sha256 "89c22cfeefd518db77aa6c3847eb709adda04549d5b469722dd75f48e7f6430a"
+      url "https://github.com/pragmatic-engineer/playbook/releases/download/v0.37.0/playbook-0.37.0-x86_64-unknown-linux-musl"
+      sha256 "b03223a35756d5a5d1d4640491038f38c1ad36b0f7c17474c30e2efd96dbabda"
     end
   end
 
