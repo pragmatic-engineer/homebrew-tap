@@ -1,10 +1,12 @@
 # homebrew-tap
 
-Homebrew tap for the [pragmatic-engineer/playbook](https://github.com/pragmatic-engineer/playbook) toolkit. It carries these tools:
+Homebrew tap for the [pragmatic-engineer/playbook](https://github.com/pragmatic-engineer/playbook) toolkit.
 
-- `playbook`, the Claude Code plugin toolkit and its binary.
-- `pbtop`, the standalone token and cost dashboard. It ships with `playbook` from 0.35.0.
-- `playbook-telemetry`, retired and replaced by `pbtop`.
+| Formula | Install | What it is |
+|---|---|---|
+| `playbook` | `brew install pragmatic-engineer/tap/playbook` | The Claude Code plugin toolkit and its binary. |
+| `pbtop` | `brew install pragmatic-engineer/tap/pbtop` | The token and cost dashboard. |
+| `playbook-telemetry` | Retired. Install `pbtop` instead. | Replaced by `pbtop`. |
 
 ## Install
 
@@ -12,47 +14,40 @@ Homebrew tap for the [pragmatic-engineer/playbook](https://github.com/pragmatic-
 brew install pragmatic-engineer/tap/playbook
 ```
 
-The tap is `pragmatic-engineer/tap`, so `brew tap pragmatic-engineer/tap` works too. Upgrade with `brew upgrade playbook`.
+Upgrade with `brew upgrade playbook`. You do not need `pbtop` if you have `playbook`, because `playbook usage` runs the same code.
 
-## Moving from the old tap
+## Trust the tap
 
-This repo used to be named `homebrew-playbook`, and the install command was `brew install pragmatic-engineer/playbook/playbook`. If you installed that way, switch taps once:
+Homebrew 6.0.0 and later asks you to trust non-official taps. Installing a fully qualified name, as above, trusts only that formula.
 
-```bash
-brew untap pragmatic-engineer/playbook
-brew tap pragmatic-engineer/tap
-```
+The install records that trust, so a later `brew upgrade playbook` works by short name. Without it, Homebrew stops with `Refusing to load formula ... from untrusted tap` and names the command to run. To install by short name without the full name first, run `brew tap pragmatic-engineer/tap`, then `brew trust --formula pragmatic-engineer/tap/playbook`. For `pbtop`, trust `pragmatic-engineer/tap/pbtop`.
 
-GitHub redirects the old repo URL, so existing links keep working. If `brew untap` refuses because `playbook` is installed from the old tap, uninstall it first and install it again from the new tap.
+The broader option is `brew trust pragmatic-engineer/tap`. It covers every current and future formula in the tap.
 
-## What this does
+Run `brew trust` to list what you trust. Run `brew untrust <target>` to remove an entry, with `--formula` for a formula.
 
-The formula downloads the prebuilt binary which `pragmatic-engineer/playbook`'s own release workflow builds, attests and checksums for each tagged release. It doesn't build from source and doesn't run a separate release pipeline. It wraps the same `SHA256SUMS` verified binary `install.sh` fetches.
+## What the formulas do
 
-Covers macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl builds). Windows isn't a Homebrew target. Windows users should use `install.sh` directly, or WSL with the Linux binary.
+Each formula downloads the prebuilt binary that the `pragmatic-engineer/playbook` release workflow builds, attests and checksums. It does not build from source. It uses the same `SHA256SUMS` that `install.sh` checks.
 
-## Formulas
+Platforms: macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64, static musl builds). Windows is not a Homebrew target. Use `install.sh` or WSL.
 
-| Formula | Install | Commands |
-|---|---|---|
-| `playbook` | `brew install pragmatic-engineer/tap/playbook` | `playbook` |
-| `pbtop` | `brew install pragmatic-engineer/tap/pbtop` | `pbtop` |
-| `playbook-telemetry` | Retired. Install `pbtop` instead. | `pbtop` and `playbook-telemetry` |
+## Retired: playbook-telemetry
 
-`playbook-telemetry` is retired. Homebrew shows it as deprecated until 2026-11-16 and disabled after that date. If you have it installed, switch once:
+`playbook-telemetry` is replaced by `pbtop`. Homebrew shows it as deprecated until 2026-11-16, then disabled. To switch:
 
 ```bash
 brew uninstall playbook-telemetry && brew install pbtop
 ```
 
-You do not need `pbtop` if you have `playbook`: `playbook usage` runs the same code as `pbtop`.
+## Moved from the old tap
 
-## Keeping the formula current
+This repo was named `homebrew-playbook`, and the old command was `brew install pragmatic-engineer/playbook/playbook`. To switch, run `brew untap pragmatic-engineer/playbook`, then install from `pragmatic-engineer/tap`. If `brew untap` refuses, uninstall `playbook` first.
 
-One `v` release of `pragmatic-engineer/playbook` ships `playbook` and `pbtop` with the same version. Its release workflow opens a `release/vX.Y.Z` pull request here that updates those formulas with `.github/scripts/bump-formula.sh`, and turns on auto-merge. When that pull request merges, the `release-tag` workflow tags the merge commit `vX.Y.Z` and publishes a release that lists the formula versions. It acts only on a merged pull request from the `igorjs[bot]` app on a `release/v*` branch, and it uses only `GITHUB_TOKEN`.
+## Keeping the formulas current
 
-The `release` workflow is the fallback. It checks every 30 minutes, and merges the bump once the `tests` workflow passes. It can also be started by hand with `workflow_dispatch` (the `bump` workflow is the same job and shares its concurrency group), or by a `tool-released` `repository_dispatch` event, which needs a sender with its own token. The schedule alone needs no secret. A bump pull request that is still open is left alone by later runs. A run also leaves a `v` release alone while its `release/vX.Y.Z` pull request is open, and a run that was not started by hand does so for the first hour after the release, so it does not open a second pull request for the same change. Every trigger runs the same job for each formula. It reads the latest release of that tool and compares it with the formula. If the release is newer, it rewrites the URLs and checksums from that release's own `SHA256SUMS` (`.github/scripts/bump-formula.sh`, which refuses to write a formula when a checksum is missing) and commits the change to a `bump/<formula>-v<version>` branch through the GitHub API and opens a pull request. It uses only the built-in `GITHUB_TOKEN`, so no secret is stored. GitHub signs the commit, so it shows as verified. A pull request opened with `GITHUB_TOKEN` gets its `pull_request` run held for approval, so the bump approves that run, waits for the `tests` workflow (audit, install and test on four platforms) to pass, and then squash merges the pull request through the API, which `protect-main` allows because the required checks passed on the branch head. The caveats of each formula end with one line that links the release notes of the installed version, built from `#{version}`, so `brew upgrade` and `brew info` point to them and the bump writes no caveats text. The `bump-script` job in `tests` runs `.github/scripts/test-bump-formula.sh` and a style check of the `pbtop` formula a release writes. Don't edit the formula's URLs or checksums by hand.
+A release of `pragmatic-engineer/playbook` opens a pull request here that updates `playbook` and `pbtop` together. A scheduled workflow is the fallback. Do not edit URLs or checksums by hand. See [docs/release-automation.md](docs/release-automation.md).
 
-The `tests` workflow in this repo runs `brew audit --strict`, `brew install` and `brew test` on Linux and macOS (arm64 and x86_64) for every push, pull request and weekly. A disabled or deprecated formula, such as `playbook-telemetry`, is only audited. Bottles are not built, because the formula installs prebuilt binaries.
+## Security
 
-If a formula is behind the latest release, check the latest `release` run in this repo.
+See [SECURITY.md](SECURITY.md).
