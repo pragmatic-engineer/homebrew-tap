@@ -5,6 +5,9 @@
 #   pbtop               pragmatic-engineer/playbook, tags vX.Y.Z       .tar.gz holding pbtop alone
 # Since playbook 0.34.0 one v release ships every tool. playbook-telemetry is
 # retired and replaced by pbtop, so it is no longer bumped.
+# The playbook formula also installs pbdoc, from the release's pbdoc-<version>-<target>.tar.gz
+# archives, as one resource per target next to the playbook binary. A release
+# with no pbdoc archive (older versions) gets a formula without the resource.
 # SOURCE_REPO and TAG_PREFIX override the source (latest-release.sh prints them),
 # which lets a formula keep following a legacy repo until its first prefixed tag.
 # A tool formula that does not exist yet is created from a template at its first release.
@@ -99,16 +102,58 @@ tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 cp "$formula" "$tmp"
 
-for target in "${targets[@]}"; do
+# pbdoc is bundled only into the playbook formula, and only when the release
+# ships its archive for every target. Some but not all is a broken release.
+pbdoc_shas=()
+if [[ "$name" = playbook ]]; then
+  for target in "${targets[@]}"; do
+    pbdoc_shas+=("$(awk -v f="pbdoc-${version}-${target}.tar.gz" '$2 == f { print $1 }' <<<"$sums")")
+  done
+  found=0
+  for sha in "${pbdoc_shas[@]}"; do
+    [[ -z "$sha" ]] && continue
+    found=$((found + 1))
+    if [[ ! "$sha" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "::error::malformed pbdoc checksum in ${tag} SHA256SUMS. Refusing to write a partial formula." >&2
+      exit 1
+    fi
+  done
+  if [[ "$found" -ne 0 && "$found" -ne ${#targets[@]} ]]; then
+    echo "::error::${tag} SHA256SUMS has pbdoc checksums for ${found} of ${#targets[@]} targets. Refusing to write a partial formula." >&2
+    exit 1
+  fi
+  # Drop the pbdoc parts first, so a re-run on any release leaves one clean copy.
+  awk '
+    $0 == "      resource \"pbdoc\" do" { skip = 1; next }
+    skip { if ($0 == "      end") skip = 0; next }
+    $0 == "    resource(\"pbdoc\").stage do" { skip_install = 1; next }
+    skip_install { if ($0 == "    end") skip_install = 0; next }
+    index($0, "/pbdoc --version") { next }
+    { print }
+  ' "$tmp" >"${tmp}.new"
+  mv "${tmp}.new" "$tmp"
+fi
+
+for i in "${!targets[@]}"; do
+  target="${targets[$i]}"
+  pbdoc_sha="${pbdoc_shas[$i]:-}"
   sha="$(awk -v f="${name}-${version}-${target}${suffix}" '$2 == f { print $1 }' <<<"$sums")"
   if [[ ! "$sha" =~ ^[0-9a-f]{64}$ ]]; then
     echo "::error::missing or malformed checksum for ${target} in ${tag} SHA256SUMS. Refusing to write a partial formula." >&2
     exit 1
   fi
   # Rewrite the url line for this target, and the sha256 line that follows it.
-  awk -v target="$target" -v suffix="$suffix" -v url="      url \"${base}/${name}-${version}-${target}${suffix}\"" -v sha="      sha256 \"${sha}\"" '
+  awk -v target="$target" -v suffix="$suffix" -v url="      url \"${base}/${name}-${version}-${target}${suffix}\"" -v sha="      sha256 \"${sha}\"" \
+    -v pbdoc_url="        url \"${base}/pbdoc-${version}-${target}.tar.gz\"" -v pbdoc_sha="${pbdoc_sha}" '
     $1 == "url" && index($0, "-" target suffix "\"") { print url; fix = 1; next }
-    fix && $1 == "sha256" { print sha; fix = 0; next }
+    fix && $1 == "sha256" {
+      print sha; fix = 0
+      if (pbdoc_sha != "") {
+        print "      resource \"pbdoc\" do"; print pbdoc_url
+        print "        sha256 \"" pbdoc_sha "\""; print "      end"
+      }
+      next
+    }
     { print }
   ' "$tmp" >"${tmp}.new"
   mv "${tmp}.new" "$tmp"
@@ -132,6 +177,28 @@ rewritten="$(grep -c "/download/${tag}/${name}-${version}-" "$tmp" || true)"
 if [[ "$rewritten" -ne ${#targets[@]} ]]; then
   echo "::error::expected ${#targets[@]} url lines for ${tag} after the rewrite, found ${rewritten}. The formula layout changed. Refusing to write." >&2
   exit 1
+fi
+
+if [[ -n "${pbdoc_shas[0]:-}" ]]; then
+  # Install pbdoc beside playbook: playbook finds it next to its own executable.
+  awk '
+    { print }
+    index($0, "bin.install_symlink \"playbook\" => \"pb\"") {
+      print "    resource(\"pbdoc\").stage do"
+      print "      bin.install \"pbdoc\""
+      print "      doc.install \"NOTICE-pbdoc\""
+      print "    end"
+    }
+    index($0, "/pb --version") {
+      print "    assert_match version.to_s, shell_output(\"#{bin}/pbdoc --version\")"
+    }
+  ' "$tmp" >"${tmp}.new"
+  mv "${tmp}.new" "$tmp"
+  pbdoc_count="$(grep -c "/download/${tag}/pbdoc-${version}-" "$tmp" || true)"
+  if [[ "$pbdoc_count" -ne ${#targets[@]} ]] || ! grep -qxF '      bin.install "pbdoc"' "$tmp"; then
+    echo "::error::expected ${#targets[@]} pbdoc resources and an install step for ${tag}, found ${pbdoc_count}. The formula layout changed. Refusing to write." >&2
+    exit 1
+  fi
 fi
 
 cp "$tmp" "$formula"

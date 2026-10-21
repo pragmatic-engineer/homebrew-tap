@@ -4,7 +4,7 @@
 # line in the caveats, the pbtop template, the refusal of
 # the retired playbook-telemetry formula and latest-release.sh against a stub gh.
 # Usage: test-bump-formula.sh [--keep]
-# With --keep, Formula/pbtop.rb is left as a release writes it, so a style and
+# With --keep, Formula/pbtop.rb and a Formula/playbook.rb with pbdoc are left as a release writes it, so a style and
 # audit run can check it.
 set -euo pipefail
 
@@ -54,6 +54,65 @@ if grep -q 'tag/old-v#{version}' "$work/f/playbook.rb" \
   pass "a bump rewrites the release notes line to the current repo and prefix"
 else
   fail "a bump rewrites the release notes line to the current repo and prefix"
+fi
+
+# pbdoc_release VERSION [SKIP_TARGET]: a release folder with the playbook
+# binaries and the pbdoc archives, leaving out one pbdoc target when given.
+pbdoc_release() {
+  local dir="$work/pbdoc-$1" t
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  for t in aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-musl x86_64-unknown-linux-musl; do
+    printf 'bin %s\n' "$t" >"$dir/playbook-$1-$t"
+    [[ "$t" = "${2:-}" ]] || printf 'pbdoc %s\n' "$t" >"$dir/pbdoc-$1-$t.tar.gz"
+  done
+  (cd "$dir" && shasum -a 256 playbook-* pbdoc-* >SHA256SUMS)
+  printf '%s' "$dir"
+}
+
+mkdir -p "$work/b"
+pbf="$work/b/playbook.rb"
+cp "$root/Formula/playbook.rb" "$pbf"
+dir="$(pbdoc_release 9.2.0)"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.2.0 "$pbf" >/dev/null 2>"$work/err" \
+  && [[ "$(grep -c 'resource "pbdoc" do' "$pbf")" -eq 4 ]] \
+  && [[ "$(grep -c '/download/v9.2.0/pbdoc-9.2.0-.*\.tar\.gz"' "$pbf")" -eq 4 ]] \
+  && [[ "$(grep -c '/download/v9.2.0/playbook-9.2.0-' "$pbf")" -eq 4 ]] \
+  && grep -qx '      bin.install "pbdoc"' "$pbf" \
+  && ! grep -q '0\{64\}' "$pbf" \
+  && ruby -c "$pbf" >/dev/null; then
+  pass "a bump with pbdoc archives writes one pbdoc resource per target and installs it"
+else
+  fail "a bump with pbdoc archives writes one pbdoc resource per target and installs it"
+fi
+
+# Running it again, and then on a release without pbdoc, leaves a valid formula.
+cp "$pbf" "$work/b/first.rb"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.2.0 "$pbf" >/dev/null 2>"$work/err" \
+  && cmp -s "$pbf" "$work/b/first.rb"; then
+  pass "a second bump of the same release changes nothing"
+else
+  fail "a second bump of the same release changes nothing"
+fi
+dir="$(release 9.3.0)"
+if DOWNLOAD_BASE="file://$dir" bash "$script" 9.3.0 "$pbf" >/dev/null 2>"$work/err" \
+  && ! grep -q 'pbdoc' "$pbf" \
+  && [[ "$(grep -c '/download/v9.3.0/playbook-9.3.0-' "$pbf")" -eq 4 ]] \
+  && ruby -c "$pbf" >/dev/null; then
+  pass "a bump to a release without pbdoc removes the pbdoc parts"
+else
+  fail "a bump to a release without pbdoc removes the pbdoc parts"
+fi
+
+mkdir -p "$work/b/partial"
+cp "$root/Formula/playbook.rb" "$work/b/partial/playbook.rb"
+dir="$(pbdoc_release 9.4.0 x86_64-unknown-linux-musl)"
+if ! DOWNLOAD_BASE="file://$dir" bash "$script" 9.4.0 "$work/b/partial/playbook.rb" >/dev/null 2>"$work/err" \
+  && grep -q 'pbdoc checksums for 3 of 4' "$work/err" \
+  && cmp -s "$root/Formula/playbook.rb" "$work/b/partial/playbook.rb"; then
+  pass "a release with pbdoc for only some targets is refused and the formula is unchanged"
+else
+  fail "a release with pbdoc for only some targets is refused and the formula is unchanged"
 fi
 
 # tool_release NAME VERSION: a release folder with the archives of one tool.
@@ -153,6 +212,7 @@ fi
 
 if [[ "${1:-}" = "--keep" ]]; then
   cp "$pbtop" "$root/Formula/pbtop.rb"
+  cp "$work/b/first.rb" "$root/Formula/playbook.rb"
   printf 'Left Formula/pbtop.rb as a release writes it, for the style check.\n'
 fi
 
